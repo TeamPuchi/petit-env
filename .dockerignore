@@ -1,0 +1,39 @@
+# build context に載せないもの。
+#
+# docker-compose.yml の `context: .` はリポジトリ全体を daemon に送るため、
+# .dockerignore が無いと repos/(uv sync 後は .venv 込みで数GB)と .env(秘密)が毎回載る。
+# Dockerfile.core は `COPY . .` をしていない(cron/ と scripts/ の5ファイルだけ)ので
+# イメージには元から焼き込まれないが、転送そのものを避ける。
+#
+# 注意: T4(コンポーネントの焼き込み COPY, docs/cloud/TODO.md)を実装するときは
+# repos/ の除外を解除するか、別の受け渡し方を決めること。
+
+# git
+.git
+.gitignore
+
+# コンポーネント本体(scripts/sync-repos.sh が展開する。イメージには焼き込まない)
+repos/
+
+# 秘密
+.env
+
+# 本番データ・記憶(絶対に context に載せない)
+petit-data/
+*.db
+*.sqlite3
+
+# ドキュメント・配布物(コンテナの中では使わない)
+docs/
+release/
+
+# 言語ランタイムの生成物
+**/.venv/
+**/__pycache__
+**/node_modules
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

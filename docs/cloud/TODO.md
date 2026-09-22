@@ -1,6 +1,6 @@
 # petit-env クラウド版 v0 に向けた TODO
 
-最終更新: 2026-09-22
+最終更新: 2026-09-23
 
 このリポジトリは fork のため **GitHub Issues が無効**（fork の既定）で、Issue を立てられなかった。
 そのためここで追う。Settings → Features → Issues を有効にすれば Issue に移せる。
@@ -11,15 +11,15 @@
 
 | ID | 優先 | 件名 | 状態 |
 |---|---|---|---|
-| T1 | 🔴 | supercronic が arm64 で静かに壊れる | パッチ検証済み・未適用 |
-| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | パッチ検証済み・未適用 |
+| T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み(実 build 未確認 → T7) |
+| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み(実 build 未確認 → T7) |
 | T3 | 🔴 | dev の `:ro` × `uv run` を解く | 方針決定済み・未着手 |
 | T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | 未着手 |
 | T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手 |
 | T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
 | T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | 未実施 |
 | T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | 未着手 |
-| T9 | 🟡 | 小さな修正まとめ | 未着手 |
+| T9 | 🟡 | 小さな修正まとめ | 一部適用(`.dockerignore`・`grep -c`)。`VOLUME`・bind アドレスは残 |
 | T10 | ⚪ | 音声2件の fork | 未着手 |
 
 ---
@@ -158,8 +158,8 @@ petit-infra の compose にも含まれていないため、**コンテナを作
 
 ## T9 🟡 小さな修正まとめ
 
-- **`.dockerignore` が無い** — build context に `repos/`（数GB）と `.env` が載る。イメージには焼き込まれないが避けたい。検証済みの内容が handoff §03 patch 2 にある
-- **`autonomous-action.sh:233`** — `grep -c ... || echo 0` が 0件時に 2行返し、直後の `-gt` が壊れる。エラーが握り潰されて結果的に意図どおり動いているだけ
+- ~~**`.dockerignore` が無い**~~ — **対応済み**。リポジトリ直下に `.dockerignore` を追加した。T4 の焼き込み COPY を実装するときは `repos/` の除外を解除すること
+- ~~**`autonomous-action.sh:233`**~~ — **対応済み**。`|| echo 0` を `|| true` にして、`-gt` 側の `2>/dev/null` も外した
 - **`Dockerfile.core:70` の `VOLUME`** — `-v` 無し起動で匿名ボリュームができ、記憶と認証情報が迷子になる。常に明示マウントする運用に倒す
 - **ダッシュボードの bind アドレス未確認** — `127.0.0.1` だと `EXPOSE 8765` が無意味になり、petit-infra の Caddy からも引けない。`m5-petit-app` の `main.py` を確認する
 

@@ -230,8 +230,12 @@ SCRIPTS_DIR="$REPOS_DIR/petit-scripts"
 MAILBOX_DIR="$PETIT_DATA_DIR/mailbox"
 MAILBOX_NOTICE=""
 if [ -d "$MAILBOX_DIR" ] && [ -f "$SCRIPTS_DIR/list_unread_mail.py" ]; then
-  UNREAD_COUNT=$(python3 "$SCRIPTS_DIR/list_unread_mail.py" "$CHARACTER_ID" 2>/dev/null | grep -c "^  from_\|^  to_" || echo 0)
-  if [ "$UNREAD_COUNT" -gt 0 ] 2>/dev/null; then
+  # grep -c は 0件でも標準出力に "0" を出したうえで終了ステータス 1 を返す。
+  # そのため `|| echo 0` だと 0件のときだけ出力が "0\n0" の2行になり、直後の -gt が
+  # 数値比較に失敗していた(エラーを 2>/dev/null に捨てて比較が偽になるので、
+  # 結果だけは意図どおりに見えていた)。`|| true` なら grep の出力(必ず1行の数値)が残る。
+  UNREAD_COUNT=$(python3 "$SCRIPTS_DIR/list_unread_mail.py" "$CHARACTER_ID" 2>/dev/null | grep -c "^  from_\|^  to_" || true)
+  if [ "$UNREAD_COUNT" -gt 0 ]; then
     MAILBOX_NOTICE="## メールボックス
 未読メールが ${UNREAD_COUNT} 件ある。Bashツールで python3 $SCRIPTS_DIR/list_unread_mail.py $CHARACTER_ID を実行して確認。"
   fi
