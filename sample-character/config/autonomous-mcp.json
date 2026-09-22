@@ -2,7 +2,7 @@
   "mcpServers": {
     "m5-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", "/opt/petit/repos/m5-petit-mcp", "m5-petit-mcp"],
+      "args": ["run", "--directory", "/opt/petit/repos/petit-mcp", "m5-petit-mcp"],
       "env": {
         "M5_HOST": "192.168.1.50",
         "CHARACTER_ID": "alice"
@@ -10,14 +10,14 @@
     },
     "memory": {
       "command": "uv",
-      "args": ["run", "--directory", "/opt/petit/repos/m5-petit-memory", "memory-mcp"],
+      "args": ["run", "--directory", "/opt/petit/repos/petit-memory", "memory-mcp"],
       "env": {
         "MEMORY_DB_PATH": "/data/characters/alice/memory.db"
       }
     },
     "desire-system": {
       "command": "uv",
-      "args": ["run", "--directory", "/opt/petit/repos/m5-petit-desire", "python", "server.py"],
+      "args": ["run", "--directory", "/opt/petit/repos/petit-desire", "python", "server.py"],
       "env": {
         "CHARACTER_ID": "alice",
         "PETIT_DATA_DIR": "/data"

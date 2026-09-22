@@ -1,4 +1,4 @@
-# m5-petit-env 利用者向けガイド
+# petit-env 利用者向けガイド
 
 Docker Desktopがあれば、開発環境を作らずに自分のぷち(M5 Petit)を動かせます。
 
@@ -32,6 +32,6 @@ docker compose -f docker-compose.release.yml down
 
 ## 注意(Phase 1)
 
-このリリース手順は **未検証(build-untested)** です。`ghcr.io/petitones/m5-petit-core`
+このリリース手順は **未検証(build-untested)** です。`ghcr.io/teampuchi/petit-core`
 イメージはまだ公開されていません。まずは開発者向けの `docker-compose.yml`(dev)から
 動作確認する予定です。

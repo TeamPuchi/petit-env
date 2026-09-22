@@ -32,23 +32,23 @@ for c in "${CHARS[@]}"; do
       /opt/petit/scripts/autonomous-action.sh "$CHARACTER_ID"
       ;;
     desire)
-      if [ -f "$REPOS_DIR/m5-petit-desire/desire_updater.py" ]; then
+      if [ -f "$REPOS_DIR/petit-desire/desire_updater.py" ]; then
         (
-          cd "$REPOS_DIR/m5-petit-desire" && \
+          cd "$REPOS_DIR/petit-desire" && \
           PETIT_DATA_DIR="$PETIT_DATA_DIR" uv run python desire_updater.py "$CHARACTER_ID"
         )
       else
-        echo "[run-for-each-character] $REPOS_DIR/m5-petit-desire が未同期。desireスキップ (character=$CHARACTER_ID)" >&2
+        echo "[run-for-each-character] $REPOS_DIR/petit-desire が未同期。desireスキップ (character=$CHARACTER_ID)" >&2
       fi
       ;;
     memory-sleep)
-      if [ -f "$REPOS_DIR/m5-petit-memory/scripts/sleep.py" ]; then
+      if [ -f "$REPOS_DIR/petit-memory/scripts/sleep.py" ]; then
         (
-          cd "$REPOS_DIR/m5-petit-memory" && \
+          cd "$REPOS_DIR/petit-memory" && \
           MEMORY_DB_PATH="$PETIT_DATA_DIR/characters/$CHARACTER_ID/memory.db" uv run python scripts/sleep.py
         )
       else
-        echo "[run-for-each-character] $REPOS_DIR/m5-petit-memory が未同期。memory-sleepスキップ (character=$CHARACTER_ID)" >&2
+        echo "[run-for-each-character] $REPOS_DIR/petit-memory が未同期。memory-sleepスキップ (character=$CHARACTER_ID)" >&2
       fi
       ;;
     experience-watchdog)

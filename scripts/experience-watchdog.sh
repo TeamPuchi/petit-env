@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 体験デーモンの見張りスクリプト(コンテナ内、汎用版プレースホルダー)。
 #
-# Phase 1(2026-07)時点では、体験デーモン(experience-daemon)相当の公開コンポーネントが
-# まだPetitOnesに存在しない。そのため、このスクリプトは EXPERIENCE_DAEMON_DIR が
+# Phase 1(2026-07)時点では、体験デーモン(experience-daemon)相当のコンポーネントが
+# まだ存在しない。そのため、このスクリプトは EXPERIENCE_DAEMON_DIR が
 # 見つかった場合のみ起動を試み、無ければ何もせず正常終了する。
-# 将来 m5-petit-experience (仮) が公開されたら、EXPERIENCE_DAEMON_DIR を合わせるか
+# 将来 petit-experience (仮) が用意されたら、EXPERIENCE_DAEMON_DIR を合わせるか
 # 環境変数で上書きするだけで有効化できる。
 set -u
 
@@ -15,7 +15,7 @@ if [ -z "$CHARACTER_ID" ]; then
 fi
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
-EXPERIENCE_DAEMON_DIR="${EXPERIENCE_DAEMON_DIR:-/opt/petit/repos/m5-petit-experience}"
+EXPERIENCE_DAEMON_DIR="${EXPERIENCE_DAEMON_DIR:-/opt/petit/repos/petit-experience}"
 LOG_DIR="$PETIT_DATA_DIR/logs"
 mkdir -p "$LOG_DIR"
 

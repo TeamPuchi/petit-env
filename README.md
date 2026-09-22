@@ -1,8 +1,10 @@
-# m5-petit-env
+# petit-env
 
 ## [English Page](./README_en.md)
 
-M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[m5-petit-mcp](https://github.com/PetitOnes/m5-petit-mcp) / [m5-petit-app](https://github.com/PetitOnes/m5-petit-app) / [m5-petit-memory](https://github.com/PetitOnes/m5-petit-memory) / [m5-petit-desire](https://github.com/PetitOnes/m5-petit-desire) / [m5-petit-scripts](https://github.com/PetitOnes/m5-petit-scripts) を1つのコンテナに組み合わせ、cron相当の自律行動・ダッシュボード・記憶整理などをまとめて起動します。
+M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[petit-mcp](https://github.com/TeamPuchi/petit-mcp) / [petit-app](https://github.com/TeamPuchi/m5-petit-app) / [petit-memory](https://github.com/TeamPuchi/petit-memory) / [petit-desire](https://github.com/TeamPuchi/petit-desire) / [petit-scripts](https://github.com/TeamPuchi/petit-scripts) を1つのコンテナに組み合わせ、cron相当の自律行動・ダッシュボード・記憶整理などをまとめて起動します。
+
+> このリポジトリは [PetitOnes/m5-petit-env](https://github.com/PetitOnes/m5-petit-env) の fork です。各コンポーネントも PetitOnes からの fork で、TeamPuchi 側では `m5-` 接頭辞を落とした名前に統一しています(`repos/` 配下のディレクトリ名も同じ)。
 
 > **Phase 1 (2026-07): authored, build-untested**
 > このリポジトリは、Docker未導入の開発機の上で書かれました。`docker build` / `docker compose up` は
@@ -17,12 +19,12 @@ M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[m5-p
 
 ```
 docker-compose.yml           # dev: repos/ をビルドコンテキストにする
-docker-compose.release.yml   # release: ghcr.io/petitones/* イメージ(将来用の雛形、Phase 4で運用開始予定)
+docker-compose.release.yml   # release: ビルド済みイメージ(将来用の雛形、Phase 4で運用開始予定)
 Dockerfile.core               # ubuntu 24.04 + node(claude CLI) + uv + supercronic
 .env.example
 cron/petit.cron               # supercronic用crontab
 scripts/
-  sync-repos.sh / .ps1        # PetitOnesの各コンポーネントを repos/ にclone/pull
+  sync-repos.sh / .ps1        # 各コンポーネントを repos/ にclone/pull
   start.sh / .ps1             # sync-repos + docker compose up をまとめて実行
   petit.sh                    # update / logs / status / stop
   entrypoint.sh                # コンテナのエントリポイント(supercronic + ダッシュボード + 体験デーモン見張り)
@@ -47,8 +49,8 @@ repos/.gitkeep                 # sync-repos.shの展開先
 ### セットアップ
 
 ```bash
-git clone https://github.com/PetitOnes/m5-petit-env.git
-cd m5-petit-env
+git clone https://github.com/TeamPuchi/petit-env.git
+cd petit-env
 cp .env.example .env
 # .env を編集: CHARACTER_IDS, M5_HOSTS_<ID> など
 ```
@@ -91,7 +93,7 @@ docker compose exec core claude login
 |---|---|---|
 | 1 | claude CLI + 自律行動 | supercronicが20分ごとに実行 |
 | 2 | MCPサーバー群(m5-mcp / memory / desire-system) | claude CLIが都度spawn |
-| 3 | ダッシュボード(m5-petit-app, FastAPI :8765) | コンテナ内で常駐 |
+| 3 | ダッシュボード(petit-app, FastAPI :8765) | コンテナ内で常駐 |
 | 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 
@@ -101,14 +103,15 @@ Windows / macOS / Linux、いずれもDocker Desktop(またはLinuxはDocker Eng
 M5デバイスとの接続はIP指定を基本とします(コンテナ内からmDNS `.local` ホスト名は解決できないことが多いため)。
 
 音声(TTS/ASR)はCPUフォールバック、または音声なし構成で動く設計です。GPUを使う場合は外部マシンで
-[m5-petit-speech](https://github.com/PetitOnes/m5-petit-speech) / [m5-petit-voice-recognition](https://github.com/PetitOnes/m5-petit-voice-recognition) を動かし、`.env` でURLを指定してください。
+[m5-petit-speech](https://github.com/PetitOnes/m5-petit-speech) / [m5-petit-voice-recognition](https://github.com/PetitOnes/m5-petit-voice-recognition) を動かし、`.env` でURLを指定してください(この2つは TeamPuchi に fork が無いため上流を参照しています)。
 
 ## 既知の制約(Phase 1)
 
 - **ビルド未検証**。前述のとおり `docker build` / `docker compose up` は未実行
-- **notes-mcp / relations-mcp はまだ含まれていません**。PetitOnesにこの2つのMCPサーバーの公開リポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(公開され次第、追加予定)
+- **notes-mcp / relations-mcp はまだ含まれていません**。この2つのMCPサーバーのリポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(用意でき次第、追加予定)
 - **体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しません**。`scripts/experience-watchdog.sh` は対象ディレクトリが見つからなければ何もせずスキップする、将来のためのプレースホルダーです
-- `docker-compose.release.yml` / `release/*` は雛形です。`ghcr.io/petitones/m5-petit-core` イメージはまだ公開されていません(Phase 4で対応予定)
+- `docker-compose.release.yml` / `release/*` は雛形です。`ghcr.io/teampuchi/petit-core` イメージはまだ公開されておらず、`Dockerfile.core` にコンポーネントを焼き込む COPY も未実装です(Phase 4で対応予定)
+- **EC2での実運用側の compose は [petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml` が正本**です。このリポジトリの compose 2本は開発用・雛形として残しています
 
 ## ライセンス
 

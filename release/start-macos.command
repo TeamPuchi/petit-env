@@ -18,12 +18,12 @@ if [ ! -f .env ]; then
 fi
 
 if ! docker compose -f docker-compose.release.yml --env-file .env up -d; then
-  echo "Failed to start m5-petit-env."
+  echo "Failed to start petit-env."
   read -r _
   exit 1
 fi
 
-echo "m5-petit-env started. Opening dashboard..."
+echo "petit-env started. Opening dashboard..."
 open "http://localhost:8765" >/dev/null 2>&1 || true
 echo "First time only: run 'docker compose -f docker-compose.release.yml exec core claude login' to authenticate."
 read -r _
