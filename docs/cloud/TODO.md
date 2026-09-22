@@ -1,0 +1,185 @@
+# petit-env クラウド版 v0 に向けた TODO
+
+最終更新: 2026-09-22
+
+このリポジトリは fork のため **GitHub Issues が無効**（fork の既定）で、Issue を立てられなかった。
+そのためここで追う。Settings → Features → Issues を有効にすれば Issue に移せる。
+
+一次資料は [`build-audit-2026-09-22.md`](./build-audit-2026-09-22.md)（行番号の出典つき）。
+
+優先度: 🔴 v0 前に必須 / 🟡 やっておきたい / ⚪ v0 後でよい
+
+| ID | 優先 | 件名 | 状態 |
+|---|---|---|---|
+| T1 | 🔴 | supercronic が arm64 で静かに壊れる | パッチ検証済み・未適用 |
+| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | パッチ検証済み・未適用 |
+| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 方針決定済み・未着手 |
+| T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | 未着手 |
+| T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手 |
+| T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
+| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | 未実施 |
+| T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | 未着手 |
+| T9 | 🟡 | 小さな修正まとめ | 未着手 |
+| T10 | ⚪ | 音声2件の fork | 未着手 |
+
+---
+
+## T1 🔴 supercronic が arm64 で静かに壊れる（build は成功してしまう）
+
+`Dockerfile.core:17` の URL が `supercronic-linux-amd64` 決め打ちで、`:16` の sha256 も amd64 のもの。
+arm64 で build しても同じ amd64 バイナリを取るため **`sha256sum -c` が一致して通り、build は成功する**。
+
+壊れるのは実行時。さらに `entrypoint.sh:5-6` の「各サービスの失敗でコンテナを落とさない」設計により、
+**cron 4ジョブが全滅しても外からは正常に見える**。
+
+実測済み:
+
+| アセット | サイズ | sha256 |
+|---|---|---|
+| `supercronic-linux-amd64` | 16,906,330 B | `dcb1403c188a9438c47d4bba82a9c357fc9351ce91627fb2bae627f0f5becfc4` |
+| `supercronic-linux-arm64` | 15,886,734 B | `e1124aa34294e2bb8ab7002f347f4363ba35097f3daf4d3c44e9d813c1fb2bb8` |
+
+amd64 側の既存ピンは実測値と完全一致。壊れているのはアーキ分岐が無いことだけ。
+
+**直し方**: `ARG TARGETARCH` で URL と sha256 を切り替える。`git apply --check` 済みのパッチが
+[handoff](https://claude.ai/artifact/GLspa3zwts93CQEMYRv2nz) §03 にある。
+
+**done**: `docker build` の成功では判定できない。`docker run --rm <image> supercronic -version` が通ること。
+
+## T2 🔴 Node 22 へ上げ、claude CLI と uv のバージョンを固定
+
+`Dockerfile.core:14` が `NODE_MAJOR=20` 固定だが、claude CLI は `engines.node >=22.0.0` を要求する。
+npm の `engine-strict` は既定 false なので警告のみで**インストールは通る**＝実行時に転ぶ。
+
+npm レジストリ実測: latest `2.1.278` は `>=22.0.0`、`>=18.0.0` だった最後は `2.1.98`、stable タグは `2.1.267`。
+NodeSource の `node_22.x/nodistro` に arm64 パッケージが実在するので `NODE_MAJOR=22` で解決する見込み。
+
+あわせて `Dockerfile.core:40` の claude CLI と `:58` の uv が**バージョン無指定**＝毎回 latest。
+1家1コンテナで台数が増えると家ごとに別版が入る。supercronic だけ固定されている非対称を解消する。
+
+**done**: `docker run --rm <image> claude --version` が通ること。
+
+## T3 🔴 dev の `:ro` バインドマウント × `uv run` を解く
+
+`docker-compose.yml` が 5コンポーネントを**すべて `:ro`** でマウントするのに、その全部に `uv run` を打っている
+（`entrypoint.sh:25` / `run-for-each-character.sh:38,48` / `autonomous-mcp.json:5,13,20`）。
+`uv run` は `.venv` を作って同期するので **`:ro` では作れない**。
+
+`sync-repos.sh` がホスト側で `uv sync` する設計だが、それは**ホストのアーキ・OS の venv** になる。
+Mac や x86 のホストで作ったものを ARM Linux コンテナでは使えない。
+
+**方針（2026-09-22 なぎ確認済み）**
+
+- 本番（EC2）: イメージに焼き込む → T4
+- dev: bind mount のまま `:ro` を外し、**`.venv` のパスにだけ匿名ボリュームを被せる**
+
+**done**: ホストに `.venv` を作らせずに `docker compose up` でダッシュボードと MCP が起動すること。
+
+## T4 🔴 `Dockerfile.core` に焼き込みの COPY を実装
+
+`Dockerfile.core:72-73` に「release: COPYで焼き込み」とコメントがあるだけで、
+**実際に COPY する行が無い**。今ビルドすると `/opt/petit/repos/` が空のイメージができる。
+`docker-compose.release.yml:2` も焼き込み済み前提で書かれているので、release 経路は現状成立しない。
+
+T3 の方針どおり「結合テスト以降は焼き込み」なので、そのタイミングで実装する。
+
+**done**: 焼き込んだイメージを `repos/` のマウント無しで起動して、MCP とダッシュボードが動くこと。
+
+## T5 🔴 petit-env ↔ petit-infra の環境変数・認証の不一致
+
+[petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml:26` が
+「petit-core イメージは petit-env の `Dockerfile.core` を build して作る」と書いている一方、
+渡す環境変数の形が噛み合っていない。
+
+| | petit-env | petit-infra (`compose/houses/house-0.env.example`) |
+|---|---|---|
+| 機体の指定 | `M5_HOSTS_<ID大文字>`（キャラごと） | `M5_HOST`（家ごと・IoT Core 経由なら空） |
+| MQTT | **無し** | `PETIT_IOT_ENDPOINT` |
+| 家の識別 | `CHARACTER_IDS` | `PETIT_HOUSEHOLD_ID` |
+| 認証 | `claude login` 前提（`.env.example:22-26`） | `ANTHROPIC_API_KEY`（SSM SecureString） |
+| メディア | 無し | `PETIT_MEDIA_BUCKET` |
+
+とくに **`M5_HOST` が空＝IoT Core 経由**という前提は petit-env 側に実装が無い。
+`sample-character/config/autonomous-mcp.json:7` は `M5_HOST` に IP を直書きしたままになっている。
+
+認証も、petit-infra 側は家ごとに API キーを SSM から配る設計なので、
+監査で「家ごとに `claude login` の手動実行が要る」と書いた懸念はこちらで解消される見込み。
+
+**done**: petit-infra の `house-0.env` をそのまま食わせてコンテナが起動すること。
+
+## T6 🟡 家コンテナ `:8765` の正本を決める
+
+`TeamPuchi/petit-app` は**クラウド版の Vite + React SPA**（`src/screens/*.tsx`、`dist-rel/` にビルド成果物）で、
+`main.py` も `pyproject.toml` も無い。petit-infra の `50-web-hosting`（S3/CloudFront）に載る側。
+
+一方 petit-infra の `compose/docker-compose.yml` は house-0 に `expose: 8765` を置き、
+Caddy 経由で API Gateway（`60-api.yaml`）から引く構成になっている。
+つまり**コンテナ側にも HTTP の口が要る**。現状それに当たるのは従来の FastAPI（`TeamPuchi/m5-petit-app`）。
+
+そのため `repos/` の配置先はここだけ `m5-petit-app` のままにしてある。
+
+**決めること**: クラウド版で家コンテナの `:8765` を
+(a) `m5-petit-app` のまま使い続ける / (b) 新しい house API に置き換える / (c) SPA からの要求に合わせて作り直す。
+
+## T7 🔴 EC2(t4g) で実 build と起動確認・EBS サイジング
+
+監査時点で docker デーモンが無く**実 build は未実行**。T1〜T2 のパッチを当ててから 1回回す。
+
+**合格条件は「build が通ること」ではない**（T1 がまさに build を通してしまう種類のため）:
+
+```
+docker run --rm <image> supercronic -version   # T1
+docker run --rm <image> claude --version       # T2
+docker run --rm <image> uname -m               # aarch64 であること
+docker image inspect <image> --format '{{.Size}}'
+```
+
+あわせて確認したいこと: arm64 で `uv.lock` の `nvidia-*` 15個と `triton` が解決対象外になるか。
+
+**EBS サイジング**: ［推測］合計 3〜4GB。**t4g のルート EBS 既定 8GB では余裕が少ない。**
+
+| 要素 | 実測 / 見積 |
+|---|---|
+| Python wheel（memory 分のみ・DL サイズ） | 554 MB |
+| 同、インストール後 | ［推測］1.2〜1.5 GB |
+| claude CLI (linux-arm64) | 223 MiB |
+| supercronic | 15 MB |
+| ubuntu + apt + Node | ［推測］300〜400 MB |
+| e5-base モデル（初回実行時に取得） | ［推測］1 GB 前後 |
+
+`petit-mcp` / `petit-desire` の依存は未取得なのでこの見積もりに入っていない。
+
+## T8 🟡 埋め込みモデルのキャッシュを永続化
+
+memory MCP の埋め込みモデル `intfloat/multilingual-e5-base` はイメージに入らず、
+初回実行時に HuggingFace から取得される（`petit-memory/src/memory_mcp/embedding.py:34-36` の遅延ロード）。
+キャッシュ先 `~/.cache/huggingface` が `Dockerfile.core:70` の `VOLUME` にも
+petit-infra の compose にも含まれていないため、**コンテナを作り直すたびに 1GB 級を再取得**する。
+
+## T9 🟡 小さな修正まとめ
+
+- **`.dockerignore` が無い** — build context に `repos/`（数GB）と `.env` が載る。イメージには焼き込まれないが避けたい。検証済みの内容が handoff §03 patch 2 にある
+- **`autonomous-action.sh:233`** — `grep -c ... || echo 0` が 0件時に 2行返し、直後の `-gt` が壊れる。エラーが握り潰されて結果的に意図どおり動いているだけ
+- **`Dockerfile.core:70` の `VOLUME`** — `-v` 無し起動で匿名ボリュームができ、記憶と認証情報が迷子になる。常に明示マウントする運用に倒す
+- **ダッシュボードの bind アドレス未確認** — `127.0.0.1` だと `EXPOSE 8765` が無意味になり、petit-infra の Caddy からも引けない。`m5-petit-app` の `main.py` を確認する
+
+## T10 ⚪ 音声2件の fork
+
+`m5-petit-speech` / `m5-petit-voice-recognition` は TeamPuchi に fork が無いため、
+`sync-repos.sh` は上流（PetitOnes）を指したままにしてある。`WITH_SPEECH=1` のときだけ使う任意コンポーネント。
+
+---
+
+## 対象外（確認済み・対応不要）
+
+監査で疑ったが問題が無かったもの。再調査しないでよい。
+
+- **memory MCP の ARM 対応** — `uv.lock` のピン版に対し aarch64 wheel を実際に `pip download` した結果 **13/13 成功**（計 554MB、torch 2.12.1 が 406MB）。ソースビルドに落ちる依存はゼロ
+- **`ubuntu:24.04`** — `linux/arm64/v8` を含む 6アーキの OCI image index
+- **apt パッケージ名 8個** — すべて noble に実在
+- **`COPY` 元 5ファイル** — すべて実在
+- **`userdel -r ubuntu` → `useradd --uid 1000 petit`** — UID 衝突は fork 元の HEAD で解消済み
+- **`PATH` と uv のインストール先** — 整合している
+- **LAN 到達性** — petit-infra の `30-iot-core.yaml` で IoT Core（Thing・機体ポリシー・MQTT トピック
+  `petit/<ThingName>/*`・shadow・jobs・`HouseHostPolicy`）が既に組まれており、機体はクラウドへ繋ぎに行く。
+  petit-env 側に残る `M5_HOST=192.168.1.50` は旧オンプレ仕様の名残で、解消は T5 の範囲

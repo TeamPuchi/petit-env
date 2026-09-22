@@ -457,8 +457,19 @@ HuggingFace キャッシュ先の指定（§3.4）。
 | ホスト `${DASHBOARD_PORT:-8765}` | `docker-compose.yml:19` | 上記の公開先 |
 
 外向きに必要な通信［推測］: Anthropic API、HuggingFace（初回モデル取得）、GitHub（`sync-repos.sh`）、
-npm / PyPI / NodeSource（build 時）。LAN 側は M5 デバイスへの到達が要る（`.env.example:15-18`）
-——**EC2 に置くと、家庭内 LAN の M5 に直接届かない**。v0 の構成上いちばん大きな未解決点だが、本監査の範囲外。
+npm / PyPI / NodeSource（build 時）、および AWS IoT Core（MQTT。下記）。
+
+> **訂正（2026-09-22 追記）。** 初版でここに「EC2 に置くと家庭内 LAN の M5 に直接届かない。
+> v0 の構成上いちばん大きな未解決点」と書いたが、**これは誤り**だった。
+> [petit-infra](https://github.com/TeamPuchi/petit-infra) の `30-iot-core.yaml` に
+> AWS IoT Core（Thing Type・機体ポリシー・MQTT トピック `petit/<ThingName>/*`・shadow・jobs、
+> および家ホスト用の `HouseHostPolicy`）が既に組まれており、**機体側からクラウドへ繋ぎに行く**設計になっている。
+> `compose/houses/house-0.env.example:15-16` にも「機体のホスト名か IP。**IoT Core 経由なら空でよい**」と
+> 明記されている。LAN 到達性は解決済みで、未解決点ではない。
+>
+> 初版でそう書いたのは、本監査のスコープが `petit-env` 単体で、petit-infra を見ていなかったため。
+> `petit-env` 側に残る `M5_HOST=192.168.1.50`（`.env.example:19` ほか）は**旧オンプレ仕様の名残**で、
+> 消し込みは §5.6 の課題になる。
 
 ### 5.5 cron の時刻（`cron/petit.cron`）
 
@@ -477,9 +488,47 @@ npm / PyPI / NodeSource（build 時）。LAN 側は M5 デバイスへの到達�
 既定は 7-8時 / 12-13時 / 18-24時）。一方 **`desire` と `experience-watchdog` は 5分ごとに無条件で走る**ので、
 家数ぶんの常時負荷はここが効く。t4g のサイジングはこの 2本を基準にすべき。
 
+### 5.6 petit-infra との突き合わせ（2026-09-22 追記）
+
+初版の監査は `petit-env` 単体で行ったが、その後
+[petit-infra](https://github.com/TeamPuchi/petit-infra) を確認したところ、
+**EC2 実運用の compose は `petit-infra/compose/docker-compose.yml` が正本**で、
+本リポジトリの compose 2本は開発用・雛形という位置づけだと分かった。
+向こうの `compose/docker-compose.yml:26` には
+「petit-core イメージは petit-env の `Dockerfile.core` を build して作る（build 未検証）」とあり、
+**本監査の対象がそのまま向こうの前提になっている**。
+
+これにより初版の記述が変わる点:
+
+| 初版の記述 | 実際 |
+|---|---|
+| LAN 到達性が最大の未解決点 | **誤り**。IoT Core で解決済み（§5.4 の訂正） |
+| C3: `ghcr.io/…/petit-core` 未公開が問題 | 影響小。petit-infra はローカル build した `petit-core:latest` を参照する |
+| 家ごとに `claude login` の手動実行が要る | 緩和される。`house-0.env.example:8-10` のとおり `ANTHROPIC_API_KEY` を SSM SecureString から家ごとに配る |
+| C1: `:ro` × `uv run` | **本番には影響しない**。petit-infra の compose に `repos/` のバインドマウントは無い。dev 側の課題として残る |
+
+逆に**新たに見つかった不一致**（環境変数の形が噛み合っていない）:
+
+| | petit-env | petit-infra (`compose/houses/house-0.env.example`) |
+|---|---|---|
+| 機体の指定 | `M5_HOSTS_<ID大文字>`（キャラごと） | `M5_HOST`（家ごと・IoT Core 経由なら空） |
+| MQTT | **無し** | `PETIT_IOT_ENDPOINT` |
+| 家の識別 | `CHARACTER_IDS` | `PETIT_HOUSEHOLD_ID` |
+| メディア | 無し | `PETIT_MEDIA_BUCKET` |
+
+また petit-infra の compose は house-0 に `expose: 8765` を置き Caddy 経由で
+API Gateway（`60-api.yaml`）から引く構成なので、**§2 の C5（ダッシュボードの bind アドレス未確認）は
+本番でも効く**。`127.0.0.1` に bind していると Caddy から引けない。
+
+残課題の追跡は [`TODO.md`](./TODO.md) に集約した。
+
 ---
 
 ## 6. 次にやること
+
+> **この節は [`TODO.md`](./TODO.md) に引き継いだ**（2026-09-22 追記）。
+> 本リポジトリは fork のため GitHub Issues が無効で Issue を立てられなかったため、
+> 残課題は T1〜T10 として TODO.md で追う。以下は監査時点の記録として残す。
 
 優先順:
 
