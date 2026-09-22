@@ -8,13 +8,22 @@
 # Phase 1 (2026-07): authored, build-untested — この Dockerfile は開発機に docker が
 # 導入されていない状態で書かれた。`docker build` はまだ一度も実行できていない。
 # 静的な確認(構文・バージョン整合性)のみ済み。
+#
+# 2026-09-22 の監査(docs/cloud/build-audit-2026-09-22.md)を受けて T1・T2 を適用済み。
+# 実 build での確認は docs/cloud/TODO.md の T7 のまま残っている。
 FROM ubuntu:24.04
 
 # ---- ビルド時に固定するバージョン ----
-ARG NODE_MAJOR=20
+# buildx が自動で渡す(amd64 / arm64)。stage 内で ARG 宣言しないと RUN から参照できない。
+ARG TARGETARCH
+ARG NODE_MAJOR=22
+# claude CLI は engines.node ">=22.0.0"。dist-tag stable の版を固定する。
+ARG CLAUDE_CODE_VERSION=2.1.267
+ARG UV_VERSION=0.12.17
 ARG SUPERCRONIC_VERSION=v0.2.47
-ARG SUPERCRONIC_SHA256=dcb1403c188a9438c47d4bba82a9c357fc9351ce91627fb2bae627f0f5becfc4
-ARG SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64
+# supercronic はアーキごとに別アセット・別 sha256(2026-09-22 実測)
+ARG SUPERCRONIC_SHA256_AMD64=dcb1403c188a9438c47d4bba82a9c357fc9351ce91627fb2bae627f0f5becfc4
+ARG SUPERCRONIC_SHA256_ARM64=e1124aa34294e2bb8ab7002f347f4363ba35097f3daf4d3c44e9d813c1fb2bb8
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -33,16 +42,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Node.js 20系 + claude CLI ----
+# ---- Node.js 22系 + claude CLI(版を固定) ----
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code
+    && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
-# ---- supercronic (バージョン・sha256を固定) ----
-RUN curl -fsSL -o /usr/local/bin/supercronic "${SUPERCRONIC_URL}" \
-    && echo "${SUPERCRONIC_SHA256}  /usr/local/bin/supercronic" | sha256sum -c - \
-    && chmod +x /usr/local/bin/supercronic
+# ---- supercronic (アーキごとに URL と sha256 を切り替え) ----
+# 旧実装は URL が supercronic-linux-amd64 決め打ちで sha256 も amd64 のものだったため、
+# arm64 で build しても sha256sum -c が通ってしまい、実行時にだけ壊れていた(T1)。
+# 未知のアーキではここで build を落とす(静かに amd64 を掴ませない)。
+RUN set -eu; \
+    case "${TARGETARCH:-}" in \
+      amd64) supercronic_sha256="${SUPERCRONIC_SHA256_AMD64}" ;; \
+      arm64) supercronic_sha256="${SUPERCRONIC_SHA256_ARM64}" ;; \
+      *) echo "supercronic: 未対応のアーキテクチャ TARGETARCH='${TARGETARCH:-未設定}' (対応: amd64, arm64)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/supercronic \
+      "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}"; \
+    echo "${supercronic_sha256}  /usr/local/bin/supercronic" | sha256sum -c -; \
+    chmod +x /usr/local/bin/supercronic
 
 # ---- 非rootユーザー ----
 # ubuntu:24.04 にはデフォルトで ubuntu ユーザー(UID 1000)がいるため先に削除する
@@ -54,8 +73,9 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 USER petit
 WORKDIR /opt/petit
 
-# ---- uv (astral公式インストーラ、petitユーザーとして) ----
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# ---- uv (astral公式インストーラ、版を固定、petitユーザーとして) ----
+# 版つき URL は releases.astral.sh へ 301 するので -L が要る(既存の -LsSf のまま)。
+RUN curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
 
 # ---- コンテナ内スクリプト・crontab ----
 COPY --chown=petit:petit cron/petit.cron /opt/petit/cron/petit.cron
