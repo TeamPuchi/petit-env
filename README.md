@@ -103,6 +103,19 @@ docker compose exec core claude login
 | 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 
+> MCPサーバーを増やすとき(SNS連携など4本目以降)は `sample-character/config/autonomous-mcp.json` の `mcpServers` に足し、`scripts/autonomous-action.sh` の `allowedTools` にも対応する `mcp__<名前>__*` を追加する。
+
+### コンポーネントのコードをどう渡すか(dev と release)
+
+**dev はバインドマウント、開発が終わって結合テスト以降は焼き込み**、という方針(2026-09-22 決定)です。
+`docker-compose.yml` はホストの `repos/` をコンテナの `/opt/petit/repos/<名前>` にバインドしますが、
+コンテナ内の `uv run` が `.venv` を作れるように **`:ro` は付けていません**。そのかわり
+`/opt/petit/repos/<名前>/.venv` にだけ匿名ボリュームを被せ、**ホスト側に `.venv` を作らせない**ようにしています
+(ホストで作った venv はホストのアーキ・OS のものなので、ARM Linux コンテナでは使えないため)。
+ソースの編集はそのまま即時反映され、venv だけがコンテナ側に閉じます。
+結合テスト以降に使う「イメージへの焼き込み(`COPY`)」は**まだ未実装**で、別途対応します
+(詳細は [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) の T3・T4)。
+
 ## OS対応
 
 Windows / macOS / Linux、いずれもDocker Desktop(またはLinuxはDocker Engine)で動作する設計です。

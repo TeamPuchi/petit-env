@@ -13,7 +13,7 @@
 |---|---|---|---|
 | T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み(実 build 未確認 → T7) |
 | T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み(実 build 未確認 → T7) |
-| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 方針決定済み・未着手 |
+| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み(実 build 未確認 → T7) |
 | T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | 未着手 |
 | T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手 |
 | T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
@@ -75,6 +75,13 @@ Mac や x86 のホストで作ったものを ARM Linux コンテナでは使え
 
 **done**: ホストに `.venv` を作らせずに `docker compose up` でダッシュボードと MCP が起動すること。
 
+**実装済み（案A）**: `docker-compose.yml` の5コンポーネントから `:ro` を外し、
+`/opt/petit/repos/<名前>/.venv` に匿名ボリュームを5本被せた。あわせて
+`Dockerfile.core` でその5つの `.venv` を **petit 所有の空ディレクトリとして先に掘ってある**。
+匿名ボリュームはイメージ側の同パスの所有者・パーミッションを引き継ぐので、
+掘っていないとボリュームが root 所有で作られ、非root の petit が venv を作れないため。
+**この所有権の引き継ぎは実 build で未確認**（T7 の確認項目に追加した）。
+
 ## T4 🔴 `Dockerfile.core` に焼き込みの COPY を実装
 
 `Dockerfile.core:72-73` に「release: COPYで焼き込み」とコメントがあるだけで、
@@ -132,6 +139,15 @@ docker run --rm <image> supercronic -version   # T1
 docker run --rm <image> claude --version       # T2
 docker run --rm <image> uname -m               # aarch64 であること
 docker image inspect <image> --format '{{.Size}}'
+```
+
+T3 の匿名ボリュームの所有権も、ここで実物を見る:
+
+```
+docker compose up -d
+docker compose exec core ls -ld /opt/petit/repos/petit-memory/.venv   # petit 所有であること
+docker compose exec core sh -c 'cd /opt/petit/repos/petit-memory && uv run python -c "print(1)"'
+ls repos/petit-memory/.venv                                           # ホスト側には出来ないこと
 ```
 
 あわせて確認したいこと: arm64 で `uv.lock` の `nvidia-*` 15個と `triton` が解決対象外になるか。

@@ -22,14 +22,16 @@ fi
 
 # --- 2. 家コンテナ内の HTTP サービス (m5-petit-app, FastAPI :8765) ---
 # クラウド版 SPA (TeamPuchi/petit-app) とは別物。詳細は scripts/sync-repos.sh のコメント。
+# 存在チェックはディレクトリではなく main.py で行う。イメージ側に .venv を先に掘ってある
+# (Dockerfile.core・T3 の匿名ボリューム用)ので、未同期でもディレクトリ自体は必ず存在するため。
 DASHBOARD_DIR="/opt/petit/repos/m5-petit-app"
-if [ -d "$DASHBOARD_DIR" ]; then
+if [ -f "$DASHBOARD_DIR/main.py" ]; then
   (
     cd "$DASHBOARD_DIR" && exec uv run python main.py
   ) >> "$LOG_DIR/dashboard.log" 2>&1 &
   echo "[entrypoint] ダッシュボード起動を試行 (log: $LOG_DIR/dashboard.log, port: 8765)"
 else
-  echo "[entrypoint] 警告: $DASHBOARD_DIR が見つからない(sync-repos未実行?)。ダッシュボードはスキップ" >&2
+  echo "[entrypoint] 警告: $DASHBOARD_DIR/main.py が見つからない(sync-repos未実行?)。ダッシュボードはスキップ" >&2
 fi
 
 # --- 3. 体験デーモン見張り (起動時に一度だけ起こす。以後はcronの見張りジョブに任せる) ---

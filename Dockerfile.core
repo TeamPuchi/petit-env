@@ -68,6 +68,11 @@ RUN set -eu; \
 RUN userdel -r ubuntu 2>/dev/null || true \
     && useradd --create-home --shell /bin/bash --uid 1000 petit \
     && mkdir -p /data /opt/petit/repos /opt/petit/scripts /opt/petit/cron /home/petit/.claude \
+    && mkdir -p /opt/petit/repos/petit-mcp/.venv \
+                /opt/petit/repos/m5-petit-app/.venv \
+                /opt/petit/repos/petit-memory/.venv \
+                /opt/petit/repos/petit-desire/.venv \
+                /opt/petit/repos/petit-scripts/.venv \
     && chown -R petit:petit /data /opt/petit /home/petit
 
 USER petit
@@ -91,6 +96,11 @@ VOLUME ["/data", "/home/petit/.claude"]
 
 # コンポーネントのコードは /opt/petit/repos/ に置く想定
 # (dev: docker-compose.yml でホストの repos/ をバインドマウント、release: COPYで焼き込み)
+#
+# 上の mkdir で各コンポーネントの .venv を petit 所有の空ディレクトリとして先に掘ってある。
+# dev の compose はこのパスに匿名ボリュームを被せる(T3・案A)。匿名ボリュームはイメージ側の
+# 同パスの所有者・パーミッションを引き継ぐため、ここが無いとボリュームが root 所有で作られ、
+# 非root の petit が uv run で venv を作れなくなる。
 
 EXPOSE 8765
 
