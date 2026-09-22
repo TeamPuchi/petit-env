@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# m5-petit-env / core image
+# petit-env / core image
 #
 # ぷち(M5 Petit)を動かすのに必要な一式(claude CLI + MCPサーバー群 + ダッシュボード + cron)を
 # 1つのコンテナにまとめたもの。非rootユーザー(petit)で動かす。

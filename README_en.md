@@ -1,11 +1,11 @@
-# m5-petit-env
+# petit-env
 
 ## [日本語ページ](./README.md)
 
 A Docker-based umbrella runtime environment for running your own M5 Petit. It wires
-[m5-petit-mcp](https://github.com/PetitOnes/m5-petit-mcp), [m5-petit-app](https://github.com/PetitOnes/m5-petit-app),
-[m5-petit-memory](https://github.com/PetitOnes/m5-petit-memory), [m5-petit-desire](https://github.com/PetitOnes/m5-petit-desire),
-and [m5-petit-scripts](https://github.com/PetitOnes/m5-petit-scripts) together in a single container, along with
+[petit-mcp](https://github.com/TeamPuchi/petit-mcp), [m5-petit-app](https://github.com/TeamPuchi/m5-petit-app),
+[petit-memory](https://github.com/TeamPuchi/petit-memory), [petit-desire](https://github.com/TeamPuchi/petit-desire),
+and [petit-scripts](https://github.com/TeamPuchi/petit-scripts) together in a single container, along with
 a cron-equivalent scheduler for autonomous behavior, the dashboard, and memory consolidation.
 
 > **Phase 1 (2026-07): authored, build-untested**
@@ -22,12 +22,12 @@ a cron-equivalent scheduler for autonomous behavior, the dashboard, and memory c
 
 ```
 docker-compose.yml           # dev: builds from repos/ as the build context
-docker-compose.release.yml   # release: ghcr.io/petitones/* images (template for future use, planned for Phase 4)
+docker-compose.release.yml   # release: prebuilt image (template for future use, planned for Phase 4)
 Dockerfile.core               # ubuntu 24.04 + node (claude CLI) + uv + supercronic
 .env.example
 cron/petit.cron               # crontab for supercronic
 scripts/
-  sync-repos.sh / .ps1        # clone/pull PetitOnes component repos into repos/
+  sync-repos.sh / .ps1        # clone/pull component repos into repos/
   start.sh / .ps1             # runs sync-repos then docker compose up
   petit.sh                    # update / logs / status / stop
   entrypoint.sh                # container entrypoint (supercronic + dashboard + experience watchdog)
@@ -52,8 +52,8 @@ repos/.gitkeep                 # where sync-repos.sh checks out components
 ### Setup
 
 ```bash
-git clone https://github.com/PetitOnes/m5-petit-env.git
-cd m5-petit-env
+git clone https://github.com/TeamPuchi/petit-env.git
+cd petit-env
 cp .env.example .env
 # edit .env: CHARACTER_IDS, M5_HOSTS_<ID>, etc.
 ```
@@ -98,7 +98,7 @@ for details.
 |---|---|---|
 | 1 | claude CLI + autonomous behavior | supercronic runs it every 20 minutes |
 | 2 | MCP servers (m5-mcp / memory / desire-system) | spawned by the claude CLI on demand |
-| 3 | Dashboard (m5-petit-app, FastAPI on :8765) | runs as a long-lived process in the container |
+| 3 | In-container HTTP service (m5-petit-app, FastAPI on :8765) | runs as a long-lived process in the container |
 | 4 | Desire updater / memory consolidation | scheduled via supercronic |
 | 5 | Experience daemon watchdog | Phase 1 placeholder (see "Known limitations" below) |
 
@@ -110,20 +110,25 @@ resolved from inside a container.
 
 Voice (TTS/ASR) is designed to work with a CPU fallback, or no voice at all. If you have a GPU
 machine, run [m5-petit-speech](https://github.com/PetitOnes/m5-petit-speech) and
-[m5-petit-voice-recognition](https://github.com/PetitOnes/m5-petit-voice-recognition) there and
+[m5-petit-voice-recognition](https://github.com/PetitOnes/m5-petit-voice-recognition) (still
+upstream — no TeamPuchi fork yet) there and
 point `.env` at their URLs.
 
 ## Known limitations (Phase 1)
 
 - **Build-untested**, as noted above.
-- **notes-mcp / relations-mcp are not included yet.** There is no public PetitOnes repository
-  for either MCP server yet, so they're not in `autonomous-action.sh`'s allowedTools (planned
-  to be added once published).
+- **notes-mcp / relations-mcp are not included yet.** There is no repository for either MCP
+  server yet, so they're not in `autonomous-action.sh`'s allowedTools (planned to be added
+  once available).
 - **No published component exists yet for an experience-daemon equivalent.**
   `scripts/experience-watchdog.sh` is a forward-compatible placeholder: it does nothing and
   exits cleanly if the target directory isn't found.
-- `docker-compose.release.yml` / `release/*` are templates. The `ghcr.io/petitones/m5-petit-core`
-  image doesn't exist yet (planned for Phase 4).
+- `docker-compose.release.yml` / `release/*` are templates. The `ghcr.io/teampuchi/petit-core`
+  image doesn't exist yet, and `Dockerfile.core` has no COPY step to bake the components in
+  (planned for Phase 4).
+- **The compose file of record for the EC2 deployment is
+  [petit-infra](https://github.com/TeamPuchi/petit-infra)'s `compose/docker-compose.yml`.**
+  The two compose files here are kept for local development and as templates.
 
 ## License
 

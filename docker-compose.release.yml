@@ -1,9 +1,12 @@
-# release用compose: GHCRのビルド済みイメージを使う(Phase 4で運用開始予定の雛形)。
+# release用compose: ビルド済みイメージを使う(Phase 4で運用開始予定の雛形)。
 # コンポーネントのコードはイメージビルド時にCOPY済みのため repos/ のバインドマウントは無い。
-# Phase 1時点ではイメージはまだ存在しない(ghcr.io/petitones/m5-petit-core は未公開)。
+# 未実装: Dockerfile.core にはコンポーネントを COPY する行がまだ無い(コメントのみ)。
+# 未公開: ghcr.io/teampuchi/petit-core は存在しない。
+# なお EC2 での実運用側の compose は petit-infra/compose/docker-compose.yml が正本で、
+# そちらはローカル build した petit-core:latest を参照している。
 services:
   core:
-    image: ghcr.io/petitones/m5-petit-core:latest
+    image: ${PETIT_CORE_IMAGE:-ghcr.io/teampuchi/petit-core:latest}
     container_name: petit-core
     env_file:
       - .env

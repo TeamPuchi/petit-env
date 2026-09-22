@@ -19,12 +19,12 @@ if not exist ".env" (
 
 docker compose -f docker-compose.release.yml --env-file .env up -d
 if errorlevel 1 (
-  echo Failed to start m5-petit-env.
+  echo Failed to start petit-env.
   pause
   exit /b 1
 )
 
-echo m5-petit-env started. Opening dashboard...
+echo petit-env started. Opening dashboard...
 start "" "http://localhost:8765"
 echo First time only: run "docker compose -f docker-compose.release.yml exec core claude login" to authenticate.
 pause

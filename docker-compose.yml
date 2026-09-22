@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.core
-    image: m5-petit-env-core:dev
+    image: petit-core:dev
     container_name: petit-core
     env_file:
       - .env
@@ -20,11 +20,11 @@ services:
     volumes:
       - petit-data:/data
       - petit-claude-auth:/home/petit/.claude
-      - ./repos/m5-petit-mcp:/opt/petit/repos/m5-petit-mcp:ro
+      - ./repos/petit-mcp:/opt/petit/repos/petit-mcp:ro
       - ./repos/m5-petit-app:/opt/petit/repos/m5-petit-app:ro
-      - ./repos/m5-petit-memory:/opt/petit/repos/m5-petit-memory:ro
-      - ./repos/m5-petit-desire:/opt/petit/repos/m5-petit-desire:ro
-      - ./repos/m5-petit-scripts:/opt/petit/repos/m5-petit-scripts:ro
+      - ./repos/petit-memory:/opt/petit/repos/petit-memory:ro
+      - ./repos/petit-desire:/opt/petit/repos/petit-desire:ro
+      - ./repos/petit-scripts:/opt/petit/repos/petit-scripts:ro
       - ./sample-character:/opt/petit/sample-character:ro
     stdin_open: true
     tty: true

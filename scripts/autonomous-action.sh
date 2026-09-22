@@ -2,7 +2,7 @@
 # 自律行動スクリプト(コンテナ内、汎用版)。
 #
 # 元(埋め込み型モノリポのautonomous-action.sample.sh)を、コンテナ内パス・
-# CHARACTER_IDS運用・「PetitOnesの公開MCPコンポーネントだけを前提にする」形に
+# CHARACTER_IDS運用・「repos/ に置かれたMCPコンポーネントだけを前提にする」形に
 # 書き直したもの。cron/petit.cron からキャラIDを引数にして呼ばれる。
 #
 # Usage:
@@ -224,9 +224,9 @@ if [ -f "$CHARACTER_DIR/diary_summary.md" ]; then
   DIARY_SUMMARY_LINE="@${CHARACTER_DIR}/diary_summary.md"
 fi
 
-# メールボックス連携は m5-petit-scripts(公開コンポーネント)が同梱されていれば使う。
+# メールボックス連携は petit-scripts が同梱されていれば使う。
 # 未同期でも自律行動自体は壊さない。
-SCRIPTS_DIR="$REPOS_DIR/m5-petit-scripts"
+SCRIPTS_DIR="$REPOS_DIR/petit-scripts"
 MAILBOX_DIR="$PETIT_DATA_DIR/mailbox"
 MAILBOX_NOTICE=""
 if [ -d "$MAILBOX_DIR" ] && [ -f "$SCRIPTS_DIR/list_unread_mail.py" ]; then
@@ -263,10 +263,10 @@ find "$LOG_DIR" -name "*.log" -mtime "+$LOG_RETENTION_DAYS" -delete 2>/dev/null
 echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$LOG_FILE"
 
 # --- allowedTools ---
-# Phase 1でPetitOnesに公開されているMCPコンポーネントのみを前提にする:
-#   m5-petit-mcp (m5-mcp) / m5-petit-memory (memory) / m5-petit-desire (desire-system)
-# notes-mcp / relations-mcp はこの umbrella 環境の Phase 1 時点ではまだ公開コンポーネントが
-# 無いため allowedTools に含めていない(将来公開されたら追加する)。
+# 現時点で揃っている MCP コンポーネントのみを前提にする:
+#   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system)
+# notes-mcp / relations-mcp はまだコンポーネントが無いため allowedTools に
+# 含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,

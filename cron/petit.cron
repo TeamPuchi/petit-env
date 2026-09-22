@@ -1,4 +1,4 @@
-# m5-petit-env / supercronic crontab
+# petit-env / supercronic crontab
 #
 # 元(埋め込み型モノリポ)のcrontabを汎用化したもの。
 # キャラクターごとに個別のcron行を書く代わりに、CHARACTER_IDS環境変数(カンマ区切り)を

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# m5-petit-env コンテナのエントリポイント。
+# petit-env コンテナのエントリポイント。
 #
 # supercronic(cron代替)・ダッシュボード・体験デーモン見張りをまとめて起動する。
 # 各サービスの起動失敗が全体を道連れにしないよう、失敗してもコンテナ自体は生き続ける
@@ -20,7 +20,8 @@ else
   echo "[entrypoint] 警告: /opt/petit/cron/petit.cron が見つからない。cronはスキップ" >&2
 fi
 
-# --- 2. ダッシュボード (m5-petit-app) ---
+# --- 2. 家コンテナ内の HTTP サービス (m5-petit-app, FastAPI :8765) ---
+# クラウド版 SPA (TeamPuchi/petit-app) とは別物。詳細は scripts/sync-repos.sh のコメント。
 DASHBOARD_DIR="/opt/petit/repos/m5-petit-app"
 if [ -d "$DASHBOARD_DIR" ]; then
   (
