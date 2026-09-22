@@ -18,7 +18,7 @@
 | T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手 |
 | T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
 | T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | 未実施 |
-| T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | 未着手 |
+| T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | petit-env 側は適用済み。petit-infra 側が残 |
 | T9 | 🟡 | 小さな修正まとめ | 一部適用(`.dockerignore`・`grep -c`)。`VOLUME`・bind アドレスは残 |
 | T10 | ⚪ | 音声2件の fork | 未着手 |
 
@@ -171,6 +171,16 @@ memory MCP の埋め込みモデル `intfloat/multilingual-e5-base` はイメー
 初回実行時に HuggingFace から取得される（`petit-memory/src/memory_mcp/embedding.py:34-36` の遅延ロード）。
 キャッシュ先 `~/.cache/huggingface` が `Dockerfile.core:70` の `VOLUME` にも
 petit-infra の compose にも含まれていないため、**コンテナを作り直すたびに 1GB 級を再取得**する。
+
+**実装済み（petit-env 側のみ）**: `Dockerfile.core` で `HF_HOME=/home/petit/.cache/huggingface` を
+固定し（petit 所有でディレクトリも作成）、compose 2本が名前付きボリューム `petit-hf-cache` を
+同じパスに被せる。`.env.example` に注意書きを1件追加した。
+
+**残り**: **EC2 の正本である [petit-infra](https://github.com/TeamPuchi/petit-infra) の
+`compose/docker-compose.yml` には同じボリュームがまだ無い**。1家1コンテナ × N家ぶん効くので、
+そちらへの反映が要る（T5 と同じ範囲で拾う）。
+uv のキャッシュ（`~/.cache/uv`）は未対応。こちらもコンテナを作り直すと wheel（memory 分だけで
+554MB）を取り直すが、今回の範囲外。
 
 ## T9 🟡 小さな修正まとめ
 
