@@ -21,7 +21,7 @@ services:
       - petit-data:/data
       - petit-claude-auth:/home/petit/.claude
       - ./repos/petit-mcp:/opt/petit/repos/petit-mcp:ro
-      - ./repos/petit-app:/opt/petit/repos/petit-app:ro
+      - ./repos/m5-petit-app:/opt/petit/repos/m5-petit-app:ro
       - ./repos/petit-memory:/opt/petit/repos/petit-memory:ro
       - ./repos/petit-desire:/opt/petit/repos/petit-desire:ro
       - ./repos/petit-scripts:/opt/petit/repos/petit-scripts:ro

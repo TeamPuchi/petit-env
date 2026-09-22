@@ -2,9 +2,15 @@
 
 ## [English Page](./README_en.md)
 
-M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[petit-mcp](https://github.com/TeamPuchi/petit-mcp) / [petit-app](https://github.com/TeamPuchi/m5-petit-app) / [petit-memory](https://github.com/TeamPuchi/petit-memory) / [petit-desire](https://github.com/TeamPuchi/petit-desire) / [petit-scripts](https://github.com/TeamPuchi/petit-scripts) を1つのコンテナに組み合わせ、cron相当の自律行動・ダッシュボード・記憶整理などをまとめて起動します。
+M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[petit-mcp](https://github.com/TeamPuchi/petit-mcp) / [m5-petit-app](https://github.com/TeamPuchi/m5-petit-app) / [petit-memory](https://github.com/TeamPuchi/petit-memory) / [petit-desire](https://github.com/TeamPuchi/petit-desire) / [petit-scripts](https://github.com/TeamPuchi/petit-scripts) を1つのコンテナに組み合わせ、cron相当の自律行動・ダッシュボード・記憶整理などをまとめて起動します。
 
 > このリポジトリは [PetitOnes/m5-petit-env](https://github.com/PetitOnes/m5-petit-env) の fork です。各コンポーネントも PetitOnes からの fork で、TeamPuchi 側では `m5-` 接頭辞を落とした名前に統一しています(`repos/` 配下のディレクトリ名も同じ)。
+
+> ⚠️ **`m5-petit-app` と [`petit-app`](https://github.com/TeamPuchi/petit-app) は別物です。**
+> このコンテナが `:8765` で動かすのは従来の FastAPI である `m5-petit-app` の方。
+> `petit-app` はクラウド版の Vite + React SPA で、コンテナではなく S3/CloudFront に載ります
+> ([petit-infra](https://github.com/TeamPuchi/petit-infra) の `50-web-hosting`)。
+> ここだけ `m5-` 接頭辞を残しているのはそのためです。
 
 > **Phase 1 (2026-07): authored, build-untested**
 > このリポジトリは、Docker未導入の開発機の上で書かれました。`docker build` / `docker compose up` は
@@ -93,7 +99,7 @@ docker compose exec core claude login
 |---|---|---|
 | 1 | claude CLI + 自律行動 | supercronicが20分ごとに実行 |
 | 2 | MCPサーバー群(m5-mcp / memory / desire-system) | claude CLIが都度spawn |
-| 3 | ダッシュボード(petit-app, FastAPI :8765) | コンテナ内で常駐 |
+| 3 | 家コンテナのHTTPサービス(m5-petit-app, FastAPI :8765) | コンテナ内で常駐 |
 | 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 

@@ -44,9 +44,12 @@ sync_repo() {
 }
 
 sync_repo "petit-mcp"     "TeamPuchi/petit-mcp"     "${PETIT_MCP_BRANCH:-main}"
-# TODO(なぎ確認): ダッシュボードの正本は TeamPuchi/m5-petit-app か TeamPuchi/petit-app か。
-# 上流と同名の m5-petit-app を暫定採用している。差し替えるならこの1行だけ変える。
-sync_repo "petit-app"     "TeamPuchi/m5-petit-app"  "${PETIT_APP_BRANCH:-main}"
+# 家コンテナ内の HTTP サービス(:8765)。ここだけ m5- 接頭辞を残している。
+# TeamPuchi/petit-app は別物(クラウド版の Vite+React SPA)で、S3/CloudFront に載る。
+# コンテナ内で動くのは従来の FastAPI(TeamPuchi/m5-petit-app)なので、
+# ディレクトリ名もリポジトリ名と揃えて m5-petit-app のままにする。
+# クラウド版で新しい house API に差し替えるかは docs/cloud/TODO.md の T6 を参照。
+sync_repo "m5-petit-app"  "TeamPuchi/m5-petit-app"  "${PETIT_APP_BRANCH:-main}"
 sync_repo "petit-memory"  "TeamPuchi/petit-memory"  "${PETIT_MEMORY_BRANCH:-main}"
 sync_repo "petit-desire"  "TeamPuchi/petit-desire"  "${PETIT_DESIRE_BRANCH:-main}"
 sync_repo "petit-scripts" "TeamPuchi/petit-scripts" "${PETIT_SCRIPTS_BRANCH:-main}"

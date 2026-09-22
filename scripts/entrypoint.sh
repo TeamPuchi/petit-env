@@ -20,8 +20,9 @@ else
   echo "[entrypoint] 警告: /opt/petit/cron/petit.cron が見つからない。cronはスキップ" >&2
 fi
 
-# --- 2. ダッシュボード (petit-app) ---
-DASHBOARD_DIR="/opt/petit/repos/petit-app"
+# --- 2. 家コンテナ内の HTTP サービス (m5-petit-app, FastAPI :8765) ---
+# クラウド版 SPA (TeamPuchi/petit-app) とは別物。詳細は scripts/sync-repos.sh のコメント。
+DASHBOARD_DIR="/opt/petit/repos/m5-petit-app"
 if [ -d "$DASHBOARD_DIR" ]; then
   (
     cd "$DASHBOARD_DIR" && exec uv run python main.py

@@ -3,7 +3,7 @@
 ## [日本語ページ](./README.md)
 
 A Docker-based umbrella runtime environment for running your own M5 Petit. It wires
-[petit-mcp](https://github.com/TeamPuchi/petit-mcp), [petit-app](https://github.com/TeamPuchi/m5-petit-app),
+[petit-mcp](https://github.com/TeamPuchi/petit-mcp), [m5-petit-app](https://github.com/TeamPuchi/m5-petit-app),
 [petit-memory](https://github.com/TeamPuchi/petit-memory), [petit-desire](https://github.com/TeamPuchi/petit-desire),
 and [petit-scripts](https://github.com/TeamPuchi/petit-scripts) together in a single container, along with
 a cron-equivalent scheduler for autonomous behavior, the dashboard, and memory consolidation.
@@ -98,7 +98,7 @@ for details.
 |---|---|---|
 | 1 | claude CLI + autonomous behavior | supercronic runs it every 20 minutes |
 | 2 | MCP servers (m5-mcp / memory / desire-system) | spawned by the claude CLI on demand |
-| 3 | Dashboard (petit-app, FastAPI on :8765) | runs as a long-lived process in the container |
+| 3 | In-container HTTP service (m5-petit-app, FastAPI on :8765) | runs as a long-lived process in the container |
 | 4 | Desire updater / memory consolidation | scheduled via supercronic |
 | 5 | Experience daemon watchdog | Phase 1 placeholder (see "Known limitations" below) |
 
