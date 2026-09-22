@@ -20,11 +20,22 @@ services:
     volumes:
       - petit-data:/data
       - petit-claude-auth:/home/petit/.claude
-      - ./repos/petit-mcp:/opt/petit/repos/petit-mcp:ro
-      - ./repos/m5-petit-app:/opt/petit/repos/m5-petit-app:ro
-      - ./repos/petit-memory:/opt/petit/repos/petit-memory:ro
-      - ./repos/petit-desire:/opt/petit/repos/petit-desire:ro
-      - ./repos/petit-scripts:/opt/petit/repos/petit-scripts:ro
+      # コンポーネント本体は :ro を付けない。コンテナ内の uv run が .venv を作るため
+      # (entrypoint.sh / run-for-each-character.sh / autonomous-mcp.json)。
+      # そのかわり .venv のパスにだけ匿名ボリュームを被せて、ホスト側に venv を作らせない。
+      # ホストの .venv はホストのアーキ・OS のものなので ARM Linux コンテナでは使えない。
+      # 詳細は docs/cloud/TODO.md の T3。
+      - ./repos/petit-mcp:/opt/petit/repos/petit-mcp
+      - /opt/petit/repos/petit-mcp/.venv
+      - ./repos/m5-petit-app:/opt/petit/repos/m5-petit-app
+      - /opt/petit/repos/m5-petit-app/.venv
+      - ./repos/petit-memory:/opt/petit/repos/petit-memory
+      - /opt/petit/repos/petit-memory/.venv
+      - ./repos/petit-desire:/opt/petit/repos/petit-desire
+      - /opt/petit/repos/petit-desire/.venv
+      - ./repos/petit-scripts:/opt/petit/repos/petit-scripts
+      - /opt/petit/repos/petit-scripts/.venv
+      # キャラ雛形はコンテナから書かないので :ro のまま
       - ./sample-character:/opt/petit/sample-character:ro
     stdin_open: true
     tty: true
