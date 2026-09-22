@@ -19,6 +19,8 @@ services:
     volumes:
       - petit-data:/data
       - petit-claude-auth:/home/petit/.claude
+      # 埋め込みモデルのキャッシュ(HF_HOME)。dev 側と同じ理由で永続化する。
+      - petit-hf-cache:/home/petit/.cache/huggingface
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -26,3 +28,4 @@ services:
 volumes:
   petit-data:
   petit-claude-auth:
+  petit-hf-cache:

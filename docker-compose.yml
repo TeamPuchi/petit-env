@@ -20,6 +20,10 @@ services:
     volumes:
       - petit-data:/data
       - petit-claude-auth:/home/petit/.claude
+      # memory MCP の埋め込みモデル(intfloat/multilingual-e5-base)は初回実行時に
+      # HuggingFace から取得される([推測]1GB級)。ここを永続化しないとコンテナを
+      # 作り直すたびに取り直しになる。パスは Dockerfile.core の HF_HOME と同じ。
+      - petit-hf-cache:/home/petit/.cache/huggingface
       # コンポーネント本体は :ro を付けない。コンテナ内の uv run が .venv を作るため
       # (entrypoint.sh / run-for-each-character.sh / autonomous-mcp.json)。
       # そのかわり .venv のパスにだけ匿名ボリュームを被せて、ホスト側に venv を作らせない。
@@ -44,3 +48,4 @@ services:
 volumes:
   petit-data:
   petit-claude-auth:
+  petit-hf-cache:

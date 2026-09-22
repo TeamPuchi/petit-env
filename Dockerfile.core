@@ -28,6 +28,7 @@ ARG SUPERCRONIC_SHA256_ARM64=e1124aa34294e2bb8ab7002f347f4363ba35097f3daf4d3c44e
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     PETIT_DATA_DIR=/data \
+    HF_HOME=/home/petit/.cache/huggingface \
     PATH=/home/petit/.local/bin:/home/petit/.npm-global/bin:$PATH
 
 # ---- OSパッケージ ----
@@ -64,10 +65,13 @@ RUN set -eu; \
     chmod +x /usr/local/bin/supercronic
 
 # ---- 非rootユーザー ----
-# ubuntu:24.04 にはデフォルトで ubuntu ユーザー(UID 1000)がいるため先に削除する
+# ubuntu:24.04 にはデフォルトで ubuntu ユーザー(UID 1000)がいるため先に削除する。
+# .cache/huggingface と各コンポーネントの .venv は、compose がボリュームを被せる先。
+# ボリュームはイメージ側の同パスの所有者を引き継ぐので、petit 所有で先に掘っておく(T3・T8)。
 RUN userdel -r ubuntu 2>/dev/null || true \
     && useradd --create-home --shell /bin/bash --uid 1000 petit \
     && mkdir -p /data /opt/petit/repos /opt/petit/scripts /opt/petit/cron /home/petit/.claude \
+    && mkdir -p /home/petit/.cache/huggingface \
     && mkdir -p /opt/petit/repos/petit-mcp/.venv \
                 /opt/petit/repos/m5-petit-app/.venv \
                 /opt/petit/repos/petit-memory/.venv \
