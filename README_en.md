@@ -124,8 +124,14 @@ point `.env` at their URLs.
   `scripts/experience-watchdog.sh` is a forward-compatible placeholder: it does nothing and
   exits cleanly if the target directory isn't found.
 - `docker-compose.release.yml` / `release/*` are templates. The `ghcr.io/teampuchi/petit-core`
-  image doesn't exist yet, and `Dockerfile.core` has no COPY step to bake the components in
-  (planned for Phase 4).
+  image doesn't exist yet (images are built locally on the house host).
+- **Baking components (K14, 2026-09-24)**: `components.lock` pins m5-petit-app / petit-memory /
+  petit-sns (`sns-api/`) to exact SHAs. Run `./scripts/vendor-components.sh` (on a machine with
+  GitHub access) to extract them into `vendor/` (git-ignored — private sources, never commit),
+  then build. `--bundle <dir>` produces a one-commit repo for petit-infra's `upload-src`, so the
+  EC2 host never needs a GitHub token. A release build fails if `vendor/` is empty. MCP configs
+  for memory / SNS are generated per `CHARACTER_IDS` at startup (`scripts/gen-mcp-config.sh`,
+  no secrets written). See the Japanese README for details.
 - **The compose file of record for the EC2 deployment is
   [petit-infra](https://github.com/TeamPuchi/petit-infra)'s `compose/docker-compose.yml`.**
   The two compose files here are kept for local development and as templates.

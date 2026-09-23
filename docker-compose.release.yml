@@ -1,8 +1,7 @@
 # release用compose: ビルド済みイメージを使う(Phase 4で運用開始予定の雛形)。
 # コンポーネントのコードはイメージビルド時にCOPY済みのため repos/ のバインドマウントは無い。
-# 未実装: Dockerfile.core にはコンポーネントを COPY する行がまだ無い(コメントのみ、T4)。
-# なので今ここで build しても /opt/petit/repos/ が空のイメージができる(起動・cronは動くが
-# MCP・ダッシュボードは何もしない)。T4 が入るまでは実運用に足りない。
+# build の前に ./scripts/vendor-components.sh で vendor/ を詰めること(K14・T4)。
+# vendor/ が空だと build が落ちる(PETIT_REQUIRE_COMPONENTS=1 が既定)。
 #
 # タグは petit-infra/compose/docker-compose.yml の house-0 の既定(`petit-core:latest`)と
 # 揃えてある(K7で確認・修正)。家ホスト上で `docker compose -f docker-compose.release.yml build`

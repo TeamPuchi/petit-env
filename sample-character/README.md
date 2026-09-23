@@ -28,7 +28,7 @@
 config/
   config.json           # M5ホスト・表示名など
   settings.json         # 自律行動の頻度・アクティブ時間・許可設定
-  autonomous-mcp.json   # 自律行動時に使うMCPサーバー設定
+  autonomous-mcp.json   # 自律行動時に使うMCPサーバー設定(機体・欲求。記憶とSNSは起動時に自動生成されるので書かない)
 SOUL.md                  # 人格の核(必ず書く)
 ROUTINES.md              # ルーチン行動の一覧(任意)
 TODO_ACTIVE.md           # 今やること(任意)

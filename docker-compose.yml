@@ -7,6 +7,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.core
+      args:
+        # dev はコンポーネントを repos/ からバインドマウントするので、vendor/ が空でも build を通す(K14)
+        PETIT_REQUIRE_COMPONENTS: "0"
     image: petit-core:dev
     container_name: petit-core
     env_file:

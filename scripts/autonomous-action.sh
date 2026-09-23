@@ -268,7 +268,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
-#   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system)
+#   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
 # notes-mcp / relations-mcp はまだコンポーネントが無いため allowedTools に
 # 含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
@@ -301,7 +301,12 @@ mcp__memory__create_episode,
 mcp__memory__search_episodes,
 mcp__desire-system__get_desires,
 mcp__desire-system__satisfy_desire,
-mcp__desire-system__boost_desire
+mcp__desire-system__boost_desire,
+mcp__petit-sns__sns_post,
+mcp__petit-sns__sns_timeline,
+mcp__petit-sns__sns_react,
+mcp__petit-sns__sns_comment,
+mcp__petit-sns__sns_inbox
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
@@ -312,12 +317,17 @@ elif [ -n "$TEST_PROMPT_FILE" ]; then
   PROMPT=$(cat "$TEST_PROMPT_FILE")
 fi
 
-# キャラクター専用のMCP設定(sample-characterからコピーして各キャラが持つ)を使う
-if [ -f "$CHARACTER_DIR/config/autonomous-mcp.json" ]; then
-  MCP_CONFIG="$CHARACTER_DIR/config/autonomous-mcp.json"
-else
-  echo "[autonomous-action] $CHARACTER_DIR/config/autonomous-mcp.json が無い。MCP無しで実行する。" >> "$LOG_FILE"
-  MCP_CONFIG=""
+# MCP 設定は2枚重ねる(K14):
+#   1. 生成分 /opt/petit/run/mcp/<id>.json … 記憶 MCP・SNS-MCP(entrypoint が起動時に作る)
+#   2. キャラ固有 $CHARACTER_DIR/config/autonomous-mcp.json … m5-mcp・desire-system など(あれば)
+# 名前(memory・petit-sns)が重なる定義はキャラ固有側に書かない。
+MCP_CONFIGS=()
+GEN_MCP_CONFIG="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
+[ -f "$GEN_MCP_CONFIG" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >> "$LOG_FILE" 2>&1 || true
+[ -f "$GEN_MCP_CONFIG" ] && MCP_CONFIGS+=("$GEN_MCP_CONFIG")
+[ -f "$CHARACTER_DIR/config/autonomous-mcp.json" ] && MCP_CONFIGS+=("$CHARACTER_DIR/config/autonomous-mcp.json")
+if [ "${#MCP_CONFIGS[@]}" -eq 0 ]; then
+  echo "[autonomous-action] MCP 設定が無い。MCP無しで実行する。" >> "$LOG_FILE"
 fi
 
 if [ "$DRY_RUN" = true ]; then
@@ -351,8 +361,8 @@ else
   echo "$TODAY" > "$SESSION_DATE_FILE"
 
   CLAUDE_ARGS=(--model "$CLAUDE_MODEL" --max-turns "${MAX_TURNS:-5}" --output-format stream-json --verbose)
-  if [ -n "$MCP_CONFIG" ]; then
-    CLAUDE_ARGS+=(--mcp-config "$MCP_CONFIG" --strict-mcp-config)
+  if [ "${#MCP_CONFIGS[@]}" -gt 0 ]; then
+    CLAUDE_ARGS+=(--mcp-config "${MCP_CONFIGS[@]}" --strict-mcp-config)
   fi
   CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" --allowedTools "$ALLOWED_TOOLS")
 

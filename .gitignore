@@ -2,6 +2,13 @@
 /repos/*
 !/repos/.gitkeep
 
+# 焼き込み用に展開したコンポーネント(scripts/vendor-components.sh)。
+# 🔴 private リポ(m5-petit-app・petit-sns)の中身なので絶対にコミットしない(petit-env は public)
+/vendor/*
+!/vendor/.gitkeep
+/.cache/
+/dist/
+
 # ローカル設定
 .env
 
