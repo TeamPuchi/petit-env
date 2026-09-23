@@ -1,6 +1,6 @@
 # petit-env クラウド版 v0 に向けた TODO
 
-最終更新: 2026-09-23
+最終更新: 2026-09-24
 
 このリポジトリは fork のため **GitHub Issues が無効**（fork の既定）で、Issue を立てられなかった。
 そのためここで追う。Settings → Features → Issues を有効にすれば Issue に移せる。
@@ -14,7 +14,7 @@
 | T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み・amd64で実build確認済み(→T7)。arm64実機は未確認 |
 | T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み・実build確認済み(→T7) |
 | T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み・実build確認済み(→T7) |
-| T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | 未着手 |
+| T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | K14で実装・amd64で家API起動とMCP一覧を確認。arm64実機は未確認 |
 | T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手。K7でCHARACTER_IDS欠落を再確認(petit-infra側の対応待ち) |
 | T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
 | T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | cloud sandbox(amd64)で実施・完了。EC2実機(arm64)は未実施 |
@@ -91,6 +91,26 @@ Mac や x86 のホストで作ったものを ARM Linux コンテナでは使え
 T3 の方針どおり「結合テスト以降は焼き込み」なので、そのタイミングで実装する。
 
 **done**: 焼き込んだイメージを `repos/` のマウント無しで起動して、MCP とダッシュボードが動くこと。
+
+**K14(2026-09-24)で実装**:
+
+- 方式: `components.lock`(固定 SHA)→ 手元の `scripts/vendor-components.sh` が `vendor/` に `git archive` →
+  `Dockerfile.core` が `COPY vendor/` し、`scripts/install-components.sh` が venv を作る。
+  家ホストに GitHub の鍵を置かないため(petit-infra §9.11)、build 時の git clone はしない。
+  家ホストへは `--bundle` で作った束(petit-env HEAD ＋ vendor/ の1コミット)を petit-infra の `upload-src` で渡す。
+- 焼き込むのは m5-petit-app(家 API)・petit-memory(記憶 MCP)・petit-sns の `sns-api/`(SNS-MCP)。
+  petit-mcp・petit-desire・petit-scripts は未(クラウドでは機体は MQTT 経由。欲求は house 表)。
+- petit-memory の torch は CPU 版 wheel に差し替え(lock どおりだと CUDA 一式が入る)。venv 1.4GB、イメージ展開後 約3.3GB(amd64)。
+- `vendor/` が空だと build が落ちる(`PETIT_REQUIRE_COMPONENTS=1`)。dev compose は 0。
+- MCP 設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` ごとに生成(秘密は書かない。env 継承を実測)。
+- PID 1 を tini にし、entrypoint を `exec tail` から `wait` に変えた(終わった子がゾンビで残っていた)。
+- petit-memory の boto3 は `AWS_REGION` を読まない(`NoRegionError` を実測)ため、生成する MCP 設定で `AWS_DEFAULT_REGION` に写す。
+
+確認(cloud sandbox・amd64、petit-infra の `house-0.env.example` をほぼそのまま食わせて):
+`/petits` 秘密なし→403・秘密あり＆アカウントなし→401、MQTT は証明書が無くても家 API を落とさず再接続を繰り返す、
+`claude mcp list` で `memory`・`petit-sns` が Connected、`docker stop` が即時に終わる、ゾンビ無し。
+
+残り: arm64 実機(EC2)での build と、DynamoDB・sns-api への実疎通。
 
 ## T5 🔴 petit-env ↔ petit-infra の環境変数・認証の不一致
 

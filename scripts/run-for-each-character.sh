@@ -43,9 +43,19 @@ for c in "${CHARS[@]}"; do
       ;;
     memory-sleep)
       if [ -f "$REPOS_DIR/petit-memory/scripts/sleep.py" ]; then
+        # 記憶 MCP と同じ置き場(sqlite/dynamo・表名・pid)を見る。gen-mcp-config.sh が作った
+        # memory の env をそのまま使う(置き場の決め方を1か所にするため・K14)。
+        MCP_JSON="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
+        [ -f "$MCP_JSON" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >&2
+        mapfile -t MEMORY_ENV < <(jq -r '.mcpServers.memory.env // {} | to_entries[] | "\(.key)=\(.value)"' "$MCP_JSON" 2>/dev/null)
+        if [ -x "$REPOS_DIR/petit-memory/.venv/bin/python" ]; then
+          MEMORY_PY=("$REPOS_DIR/petit-memory/.venv/bin/python")   # 焼き込み済み(CPU 版 torch)
+        else
+          MEMORY_PY=(uv run python)                               # dev
+        fi
         (
           cd "$REPOS_DIR/petit-memory" && \
-          MEMORY_DB_PATH="$PETIT_DATA_DIR/characters/$CHARACTER_ID/memory.db" uv run python scripts/sleep.py
+          env "${MEMORY_ENV[@]}" "${MEMORY_PY[@]}" scripts/sleep.py
         )
       else
         echo "[run-for-each-character] $REPOS_DIR/petit-memory が未同期。memory-sleepスキップ (character=$CHARACTER_ID)" >&2

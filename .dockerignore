@@ -5,8 +5,8 @@
 # Dockerfile.core は `COPY . .` をしていない(cron/ と scripts/ の5ファイルだけ)ので
 # イメージには元から焼き込まれないが、転送そのものを避ける。
 #
-# 注意: T4(コンポーネントの焼き込み COPY, docs/cloud/TODO.md)を実装するときは
-# repos/ の除外を解除するか、別の受け渡し方を決めること。
+# T4(K14): 焼き込むコンポーネントは repos/ ではなく vendor/(scripts/vendor-components.sh が
+# components.lock の固定 SHA から作る)から渡す。repos/ は dev のバインドマウント専用のまま除外する。
 
 # git
 .git
@@ -14,6 +14,10 @@
 
 # コンポーネント本体(scripts/sync-repos.sh が展開する。イメージには焼き込まない)
 repos/
+
+# vendor-components.sh の取得キャッシュ・束(vendor/ 自体は context に載せる)
+.cache/
+dist/
 
 # 秘密
 .env

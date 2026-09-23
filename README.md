@@ -26,14 +26,19 @@ M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[peti
 ```
 docker-compose.yml           # dev: repos/ をビルドコンテキストにする
 docker-compose.release.yml   # release: ビルド済みイメージ(将来用の雛形、Phase 4で運用開始予定)
-Dockerfile.core               # ubuntu 24.04 + node(claude CLI) + uv + supercronic
+Dockerfile.core               # ubuntu 24.04 + node(claude CLI) + uv + supercronic + tini + 焼き込んだコンポーネント
+components.lock               # 焼き込むコンポーネントの固定 SHA(K14)
+vendor/                       # vendor-components.sh の展開先(git 管理外・private の中身)
 .env.example
 cron/petit.cron               # supercronic用crontab
 scripts/
   sync-repos.sh / .ps1        # 各コンポーネントを repos/ にclone/pull
   start.sh / .ps1             # sync-repos + docker compose up をまとめて実行
   petit.sh                    # update / logs / status / stop
-  entrypoint.sh                # コンテナのエントリポイント(supercronic + ダッシュボード + 体験デーモン見張り)
+  entrypoint.sh                # コンテナのエントリポイント(MCP設定生成 + supercronic + 家API + 体験デーモン見張り)
+  vendor-components.sh         # components.lock の版を vendor/ に展開・家ホストへ渡す束を作る(手元で実行)
+  install-components.sh        # build 中に venv を作る(Dockerfile.core から)
+  gen-mcp-config.sh            # CHARACTER_IDS ごとに記憶 MCP・SNS-MCP の設定を作る(起動時)
   autonomous-action.sh         # 自律行動スクリプト(コンテナ内汎用版)
   experience-watchdog.sh       # 体験デーモン見張り(Phase 1時点ではプレースホルダー)
   run-for-each-character.sh    # CHARACTER_IDSを展開して各ジョブを実行する窓口
@@ -98,12 +103,13 @@ docker compose exec core claude login
 | # | コンポーネント | 動き方 |
 |---|---|---|
 | 1 | claude CLI + 自律行動 | supercronicが20分ごとに実行 |
-| 2 | MCPサーバー群(m5-mcp / memory / desire-system) | claude CLIが都度spawn |
-| 3 | 家コンテナのHTTPサービス(m5-petit-app, FastAPI :8765) | コンテナ内で常駐 |
+| 2 | MCPサーバー群(memory / petit-sns は自動生成、m5-mcp / desire-system はキャラ固有設定) | claude CLIが都度spawn |
+| 3 | 家 API(m5-petit-app, FastAPI :8765。petit-infra の Caddy が `/house/*` をここへ) | コンテナ内で常駐(落ちたら起こし直す) |
 | 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 
-> MCPサーバーを増やすとき(SNS連携など4本目以降)は `sample-character/config/autonomous-mcp.json` の `mcpServers` に足し、`scripts/autonomous-action.sh` の `allowedTools` にも対応する `mcp__<名前>__*` を追加する。
+> 記憶 MCP(`memory`)と SNS-MCP(`petit-sns`)の設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` のぷちごとに `/opt/petit/run/mcp/<id>.json` へ作る(秘密は書かない。`PETIT_SNS_INTERNAL_SECRET`・`ANTHROPIC_API_KEY`・AWS の認証情報はコンテナの env から claude 経由で MCP に引き継がれる)。`PETIT_HOUSE_TABLE` があれば記憶は DynamoDB(pk `P#<pid>`)、無ければ `/data/characters/<id>/memory.db`。
+> それ以外の MCP サーバー(機体・欲求など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
 
 ### コンポーネントのコードをどう渡すか(dev と release)
 
@@ -113,8 +119,46 @@ docker compose exec core claude login
 `/opt/petit/repos/<名前>/.venv` にだけ匿名ボリュームを被せ、**ホスト側に `.venv` を作らせない**ようにしています
 (ホストで作った venv はホストのアーキ・OS のものなので、ARM Linux コンテナでは使えないため)。
 ソースの編集はそのまま即時反映され、venv だけがコンテナ側に閉じます。
-結合テスト以降に使う「イメージへの焼き込み(`COPY`)」は**まだ未実装**で、別途対応します
-(詳細は [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) の T3・T4)。
+dev の compose は `PETIT_REQUIRE_COMPONENTS=0` を渡すので、`vendor/` が空でも build は通ります。
+結合テスト以降に使う「イメージへの焼き込み」は下の「家コンテナへの焼き込み」を参照(T4・K14 で実装)。
+
+### 家コンテナへの焼き込み(K14・2026-09-24)
+
+**取り込み方式**: `components.lock` に書いた**固定 SHA** を、GitHub に触れる手元(社長 PC)で
+`scripts/vendor-components.sh` が `git archive` して `vendor/<名前>/` に展開し、それを build context に入れて `COPY` する。
+build 時に家ホストから git clone する方式は取らない——m5-petit-app・petit-sns は private で、
+家ホスト(EC2)に GitHub のトークンを置かない方針(petit-infra README §9.11)のため。build secret も要らない。
+
+| 名前(`/opt/petit/repos/<名前>`) | 元 | 中で動くもの |
+|---|---|---|
+| `m5-petit-app` | `TeamPuchi/m5-petit-app`(develop の SHA) | 家 API(:8765・`PETIT_AUTH_MODE=gateway`・MQTT ブリッジ) |
+| `petit-memory` | `TeamPuchi/petit-memory` | 記憶 MCP(`memory-mcp`。DynamoDB は `--extra dynamo`) |
+| `petit-sns` | `TeamPuchi/petit-sns` の `sns-api/` | SNS-MCP(`petit-sns-mcp`。sns-api 本体は別コンテナ) |
+
+- venv は build 中に作る(`scripts/install-components.sh`)。実行時に `uv sync` は走らない。
+- petit-memory の torch は lock の版のまま **CPU 版 wheel** に差し替える(lock どおりだと Linux では CUDA 一式で数 GB)。
+- `vendor/` が空のまま build すると**落ちる**(`PETIT_REQUIRE_COMPONENTS=1` が既定)。「build は通ったが中身が空」を作らないため。
+- 入った版はイメージの `/opt/petit/components.txt` で見られる。版を上げるときは `components.lock` の SHA を書き換えて PR にする。
+- 🔴 `vendor/` と `dist/` は git に入れない(`.gitignore` 済み)。このリポは public。
+
+手元での build:
+
+```bash
+./scripts/vendor-components.sh
+docker compose -f docker-compose.release.yml build
+```
+
+家ホスト(EC2)へ渡すとき(petit-infra の `upload-src` は HEAD を `git archive` するので、vendor/ 込みで1コミットにした束を渡す):
+
+```bash
+./scripts/vendor-components.sh --bundle dist/petit-core-src
+# 以降は petit-infra のチェックアウトで
+./scripts/house-compose-deploy.sh upload-src ../petit-env/dist/petit-core-src petit-core
+./scripts/house-compose-deploy.sh build <S3 URI> petit-core:latest . Dockerfile.core
+```
+
+起動時の流れ(`scripts/entrypoint.sh`・PID 1 は tini): MCP 設定の生成 → supercronic → 家 API(落ちたら 5 秒から倍々・最大 5 分で起こし直す。
+出力は `/data/logs/dashboard.log` と `docker compose logs` の両方)→ 体験デーモン見張り。
 
 ### 家ホストでの petit-core イメージの build(K7・2026-09-23 実 build 確認済み)
 
@@ -125,6 +169,7 @@ EC2(t4g.small・arm64)の家ホストに載せる `petit-core` イメージは�
 ```bash
 git clone https://github.com/TeamPuchi/petit-env.git
 cd petit-env
+./scripts/vendor-components.sh   # K14: 焼き込むコンポーネントを vendor/ へ(GitHub に触れる手元で)
 docker compose -f docker-compose.release.yml build
 ```
 
@@ -147,10 +192,9 @@ docker compose -f docker-compose.release.yml build
 家ホスト(実 arm64)でも同じ手順で通る見込みですが、**実機での確認はまだ**です(EC2上でのbuild・
 supercronic起動確認・EBSサイジングは [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) の T7 を参照)。
 
-**まだ実運用には足りない点**: `Dockerfile.core` はコンポーネント5つの `COPY` をまだ実装していない(T4)ため、
-上記でbuildしたイメージは core のガワ(cron・entrypoint・claude CLI・uv)だけが入った状態です。
-起動はしますが、`/opt/petit/repos/` が空なので MCP サーバーもダッシュボードも動きません。
-T4 が入るまでは petit-infra 側の house-0 も同様に「起動するが何もしない」状態になります。
+**K14(2026-09-24)で T4 を実装**: 上の手順の前に `./scripts/vendor-components.sh` が要ります(無いと build が落ちる)。
+家 API・記憶 MCP・SNS-MCP が焼き込まれ、amd64 で「`/petits` が 403(秘密なし)/401(秘密あり・アカウントなし)」
+「`claude mcp list` で memory・petit-sns が Connected」まで確認済み。arm64 実機は未確認。
 
 ## OS対応
 
@@ -165,9 +209,9 @@ M5デバイスとの接続はIP指定を基本とします(コンテナ内から
 - **ビルド確認済み(K7・2026-09-23)**。`docker build` / `docker compose up` は通り、supercronic・claude CLIの起動・cronジョブの発火・T3の匿名ボリューム所有権を確認済みです(cloud sandbox・amd64での代替検証。実機arm64での確認は未実施 → [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) T7)
 - **notes-mcp / relations-mcp はまだ含まれていません**。この2つのMCPサーバーのリポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(用意でき次第、追加予定)
 - **体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しません**。`scripts/experience-watchdog.sh` は対象ディレクトリが見つからなければ何もせずスキップする、将来のためのプレースホルダーです
-- `docker-compose.release.yml` / `release/*` は雛形です。家ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「家ホストでの petit-core イメージの build」参照・レジストリは未導入)。ただし `Dockerfile.core` にコンポーネントを焼き込む COPY はまだ未実装で(T4)、build自体は通ってもコンポーネントの中身は空のままです
+- `docker-compose.release.yml` / `release/*` は雛形です。家ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「家ホストでの petit-core イメージの build」参照・レジストリは未導入)。焼き込むのは m5-petit-app・petit-memory・petit-sns(SNS-MCP)の3つだけで、petit-mcp・petit-desire・petit-scripts はまだ焼き込んでいません(クラウドでは機体は MQTT 経由のため)
 - **EC2での実運用側の compose は [petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml` が正本**です。このリポジトリの compose 2本は開発用・雛形として残しています
-- **petit-env ↔ petit-infra の環境変数が一部噛み合っていません**(T5)。特に `CHARACTER_IDS` を petit-infra 側の `compose/houses/house-0.env.example` が渡していないため、house-0 をそのまま起動すると cron ジョブが「CHARACTER_IDS が未設定。何もしない」で毎回スキップされます。petit-infra 側の対応が必要です
+- **petit-env ↔ petit-infra の環境変数**(T5): `CHARACTER_IDS` は petit-infra 側で入りました。K14 で house-0.env(雛形)をそのまま食わせて家 API が起動することを確認済み。残りは docs/cloud/TODO.md の T5
 
 ## ライセンス
 
