@@ -116,6 +116,42 @@ docker compose exec core claude login
 結合テスト以降に使う「イメージへの焼き込み(`COPY`)」は**まだ未実装**で、別途対応します
 (詳細は [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) の T3・T4)。
 
+### 家ホストでの petit-core イメージの build(K7・2026-09-23 実 build 確認済み)
+
+EC2(t4g.small・arm64)の家ホストに載せる `petit-core` イメージは、**レジストリを増やさず**、
+家ホスト自身の上で `docker compose build` してその場で使います。`ghcr.io` 等への push/pull は
+まだ導入していません(将来 Phase 4 で切り替える余地は `PETIT_CORE_IMAGE` で残してあります)。
+
+```bash
+git clone https://github.com/TeamPuchi/petit-env.git
+cd petit-env
+docker compose -f docker-compose.release.yml build
+```
+
+これで `petit-core:latest` がホストの Docker にできます。タグ名は
+[petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml`(house-0)が
+参照する既定タグ(`${PETIT_CORE_IMAGE:-petit-core:latest}`)と揃えてあるので、続けて petit-infra 側の
+`docker compose up -d` を実行すればそのまま拾われます(同じ Docker ホスト内なので pull は発生しません)。
+
+> **arm64 の明示指定が要る場合**(buildx のデフォルトビルダーがホストネイティブでない等)は
+> `docker buildx build --platform linux/arm64 -f Dockerfile.core -t petit-core:latest --load .` を使ってください。
+
+**確認できたこと(このセッション: cloud sandbox・amd64・buildxのdocker-containerドライバでqemu-aarch64が
+`exec format error` になり arm64 実行ができなかったため、amd64 で代替検証)**:
+
+- `docker build` が通り、`docker run --entrypoint supercronic petit-core:amd64 -version` → `v0.2.47`
+- `docker run --entrypoint claude petit-core:amd64 --version` → `2.1.267 (Claude Code)`
+- `docker compose up -d` → `entrypoint.sh` が起動し、supercronicがcrontabを読み込んでジョブを実際に発火(1分間隔のテストcrontabで実行成功を確認)
+- 5コンポーネントの `.venv` は匿名ボリュームにより `petit:petit` 所有になり、`uv run` が通る。ホスト側の `repos/<name>/.venv` は空のまま(T3の設計どおり)
+
+家ホスト(実 arm64)でも同じ手順で通る見込みですが、**実機での確認はまだ**です(EC2上でのbuild・
+supercronic起動確認・EBSサイジングは [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) の T7 を参照)。
+
+**まだ実運用には足りない点**: `Dockerfile.core` はコンポーネント5つの `COPY` をまだ実装していない(T4)ため、
+上記でbuildしたイメージは core のガワ(cron・entrypoint・claude CLI・uv)だけが入った状態です。
+起動はしますが、`/opt/petit/repos/` が空なので MCP サーバーもダッシュボードも動きません。
+T4 が入るまでは petit-infra 側の house-0 も同様に「起動するが何もしない」状態になります。
+
 ## OS対応
 
 Windows / macOS / Linux、いずれもDocker Desktop(またはLinuxはDocker Engine)で動作する設計です。
@@ -126,11 +162,12 @@ M5デバイスとの接続はIP指定を基本とします(コンテナ内から
 
 ## 既知の制約(Phase 1)
 
-- **ビルド未検証**。前述のとおり `docker build` / `docker compose up` は未実行
+- **ビルド確認済み(K7・2026-09-23)**。`docker build` / `docker compose up` は通り、supercronic・claude CLIの起動・cronジョブの発火・T3の匿名ボリューム所有権を確認済みです(cloud sandbox・amd64での代替検証。実機arm64での確認は未実施 → [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) T7)
 - **notes-mcp / relations-mcp はまだ含まれていません**。この2つのMCPサーバーのリポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(用意でき次第、追加予定)
 - **体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しません**。`scripts/experience-watchdog.sh` は対象ディレクトリが見つからなければ何もせずスキップする、将来のためのプレースホルダーです
-- `docker-compose.release.yml` / `release/*` は雛形です。`ghcr.io/teampuchi/petit-core` イメージはまだ公開されておらず、`Dockerfile.core` にコンポーネントを焼き込む COPY も未実装です(Phase 4で対応予定)
+- `docker-compose.release.yml` / `release/*` は雛形です。家ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「家ホストでの petit-core イメージの build」参照・レジストリは未導入)。ただし `Dockerfile.core` にコンポーネントを焼き込む COPY はまだ未実装で(T4)、build自体は通ってもコンポーネントの中身は空のままです
 - **EC2での実運用側の compose は [petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml` が正本**です。このリポジトリの compose 2本は開発用・雛形として残しています
+- **petit-env ↔ petit-infra の環境変数が一部噛み合っていません**(T5)。特に `CHARACTER_IDS` を petit-infra 側の `compose/houses/house-0.env.example` が渡していないため、house-0 をそのまま起動すると cron ジョブが「CHARACTER_IDS が未設定。何もしない」で毎回スキップされます。petit-infra 側の対応が必要です
 
 ## ライセンス
 

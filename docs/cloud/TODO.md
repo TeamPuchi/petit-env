@@ -11,13 +11,13 @@
 
 | ID | 優先 | 件名 | 状態 |
 |---|---|---|---|
-| T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み(実 build 未確認 → T7) |
-| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み(実 build 未確認 → T7) |
-| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み(実 build 未確認 → T7) |
+| T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み・amd64で実build確認済み(→T7)。arm64実機は未確認 |
+| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み・実build確認済み(→T7) |
+| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み・実build確認済み(→T7) |
 | T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | 未着手 |
-| T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手 |
+| T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手。K7でCHARACTER_IDS欠落を再確認(petit-infra側の対応待ち) |
 | T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
-| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | 未実施 |
+| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | cloud sandbox(amd64)で実施・完了。EC2実機(arm64)は未実施 |
 | T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | petit-env 側は適用済み。petit-infra 側が残 |
 | T9 | 🟡 | 小さな修正まとめ | 一部適用(`.dockerignore`・`grep -c`)。`VOLUME`・bind アドレスは残 |
 | T10 | ⚪ | 音声2件の fork | 未着手 |
@@ -135,9 +135,9 @@ Caddy 経由で API Gateway（`60-api.yaml`）から引く構成になってい�
 **合格条件は「build が通ること」ではない**（T1 がまさに build を通してしまう種類のため）:
 
 ```
-docker run --rm <image> supercronic -version   # T1
-docker run --rm <image> claude --version       # T2
-docker run --rm <image> uname -m               # aarch64 であること
+docker run --rm --entrypoint supercronic <image> -version   # T1(entrypoint.shはCMDを無視するので--entrypointが要る)
+docker run --rm --entrypoint claude <image> --version       # T2
+docker run --rm --entrypoint uname <image> -m               # aarch64 であること
 docker image inspect <image> --format '{{.Size}}'
 ```
 
@@ -151,6 +151,20 @@ ls repos/petit-memory/.venv                                           # ホス�
 ```
 
 あわせて確認したいこと: arm64 で `uv.lock` の `nvidia-*` 15個と `triton` が解決対象外になるか。
+
+**K7(2026-09-23)で実施・結果**: claude.ai cloud sandbox上(docker 29.3.1 + buildx、dockerd未起動だったため
+root権限で起動)で実施。buildxのdocker-containerドライバ+qemu-aarch64(binfmt_misc)を試したが
+`exec format error`でarm64エミュレーションが機能しなかった(サンドボックス側の制約とみられる。
+Docker Hubのpullなど、dockerd自体のネットワークは通ったが、buildステップの実行コンテナ側は
+arm64バイナリを動かせなかった)。そのため**amd64で代替検証**:
+
+- `supercronic -version` → `v0.2.47` ✅ / `claude --version` → `2.1.267 (Claude Code)` ✅ / `uname -m` → `x86_64`(amd64で検証したため。arm64実機は未確認)
+- image size: `docker images` 表示で 1.22GB(amd64)
+- `docker compose up -d` → 起動・supercronicがcrontab読み込み。1分間隔のテストcrontabで実際にジョブが発火・成功することも確認(本番crontabは最短5分間隔のため、実発火はテスト用crontabで代替確認)
+- `.venv` は `petit:petit` 所有・`uv run` 成功・ホスト側 `repos/petit-memory/.venv` は空 ✅(T3)
+- なお、サンドボックスの透過proxyがTLS終端しておりcurl/npmが証明書検証で落ちたため、検証専用にproxyのCAをinstallするステップを**一時的にのみ**Dockerfileへ足して確認した(コミットはしていない。家ホスト/EC2は通常のインターネット直結なので、このワークアラウンドは不要と見込み)
+
+**残作業**: EC2実機(t4g.small・arm64)での実 build・起動確認、EBSサイジング実測。
 
 **EBS サイジング**: ［推測］合計 3〜4GB。**t4g のルート EBS 既定 8GB では余裕が少ない。**
 
