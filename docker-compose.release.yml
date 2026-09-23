@@ -1,12 +1,19 @@
 # release用compose: ビルド済みイメージを使う(Phase 4で運用開始予定の雛形)。
 # コンポーネントのコードはイメージビルド時にCOPY済みのため repos/ のバインドマウントは無い。
-# 未実装: Dockerfile.core にはコンポーネントを COPY する行がまだ無い(コメントのみ)。
-# 未公開: ghcr.io/teampuchi/petit-core は存在しない。
-# なお EC2 での実運用側の compose は petit-infra/compose/docker-compose.yml が正本で、
-# そちらはローカル build した petit-core:latest を参照している。
+# 未実装: Dockerfile.core にはコンポーネントを COPY する行がまだ無い(コメントのみ、T4)。
+# なので今ここで build しても /opt/petit/repos/ が空のイメージができる(起動・cronは動くが
+# MCP・ダッシュボードは何もしない)。T4 が入るまでは実運用に足りない。
+#
+# タグは petit-infra/compose/docker-compose.yml の house-0 の既定(`petit-core:latest`)と
+# 揃えてある(K7で確認・修正)。家ホスト上で `docker compose -f docker-compose.release.yml build`
+# すれば、レジストリを増やさずにそのまま petit-infra 側の compose から拾える。
+# ghcr.io 等へ push/pull する運用に切り替えるときは PETIT_CORE_IMAGE を上書きする(Phase 4)。
 services:
   core:
-    image: ${PETIT_CORE_IMAGE:-ghcr.io/teampuchi/petit-core:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    image: ${PETIT_CORE_IMAGE:-petit-core:latest}
     container_name: petit-core
     env_file:
       - .env
