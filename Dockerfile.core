@@ -105,6 +105,7 @@ COPY --chown=petit:petit scripts/autonomous-action.sh /opt/petit/scripts/autonom
 COPY --chown=petit:petit scripts/experience-watchdog.sh /opt/petit/scripts/experience-watchdog.sh
 COPY --chown=petit:petit scripts/run-for-each-character.sh /opt/petit/scripts/run-for-each-character.sh
 COPY --chown=petit:petit scripts/gen-mcp-config.sh /opt/petit/scripts/gen-mcp-config.sh
+COPY --chown=petit:petit scripts/purge-claude-transcripts.sh /opt/petit/scripts/purge-claude-transcripts.sh
 
 RUN chmod +x /opt/petit/entrypoint.sh /opt/petit/scripts/*.sh
 

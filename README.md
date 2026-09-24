@@ -107,6 +107,9 @@ docker compose exec core claude login
 | 3 | 家 API(m5-petit-app, FastAPI :8765。petit-infra の Caddy が `/house/*` をここへ) | コンテナ内で常駐(落ちたら起こし直す) |
 | 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
+| 6 | claude CLI の会話記録の消去(K21) | supercronicが毎日、`~/.claude/projects` 等の24時間より古いものを消す(`scripts/purge-claude-transcripts.sh`) |
+
+> **claude CLI の会話記録は残さない**(K21・2026-09-24)。記憶は記憶 MCP(petit-memory。忘れる＝鍵ごと消す)が持つので、`~/.claude`(ボリューム `petit-claude-auth-<pid>`)の `projects/*.jsonl`・`history.jsonl` などは毎日24時間より古いものを消す。認証(`.credentials.json`)と設定は消さない。
 
 > 記憶 MCP(`memory`)と SNS-MCP(`petit-sns`)の設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` のぷちごとに `/opt/petit/run/mcp/<id>.json` へ作る(秘密は書かない。`PETIT_SNS_INTERNAL_SECRET`・`ANTHROPIC_API_KEY`・AWS の認証情報はコンテナの env から claude 経由で MCP に引き継がれる)。`PETIT_HOUSE_TABLE` があれば記憶は DynamoDB(pk `P#<pid>`)、無ければ `/data/characters/<id>/memory.db`。
 > それ以外の MCP サーバー(機体・欲求など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
@@ -139,7 +142,7 @@ EC2 ホストに GitHub のトークンを置かない方針(petit-infra README 
 | 名前(`/opt/petit/repos/<名前>`) | 元 | 中で動くもの |
 |---|---|---|
 | `m5-petit-app` | `TeamPuchi/m5-petit-app`(develop の SHA) | 家 API(:8765・`PETIT_AUTH_MODE=gateway`・MQTT ブリッジ) |
-| `petit-memory` | `TeamPuchi/petit-memory` | 記憶 MCP(`memory-mcp`。DynamoDB は `--extra dynamo`) |
+| `petit-memory` | `TeamPuchi/petit-memory` | 記憶 MCP(`memory-mcp`。`--extra dynamo` で boto3＋cryptography＝K20 の暗号シュレッダーまで入る) |
 | `petit-sns` | `TeamPuchi/petit-sns` の `sns-api/` | SNS-MCP(`petit-sns-mcp`。sns-api 本体は別コンテナ) |
 
 - venv は build 中に作る(`scripts/install-components.sh`)。実行時に `uv sync` は走らない。
