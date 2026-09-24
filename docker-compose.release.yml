@@ -3,8 +3,8 @@
 # build の前に ./scripts/vendor-components.sh で vendor/ を詰めること(K14・T4)。
 # vendor/ が空だと build が落ちる(PETIT_REQUIRE_COMPONENTS=1 が既定)。
 #
-# タグは petit-infra/compose/docker-compose.yml の house-0 の既定(`petit-core:latest`)と
-# 揃えてある(K7で確認・修正)。家ホスト上で `docker compose -f docker-compose.release.yml build`
+# タグは petit-infra/compose/docker-compose.yml の petit-mio の既定(`petit-core:latest`)と
+# 揃えてある(K7で確認・修正)。 EC2 ホスト上で `docker compose -f docker-compose.release.yml build`
 # すれば、レジストリを増やさずにそのまま petit-infra 側の compose から拾える。
 # ghcr.io 等へ push/pull する運用に切り替えるときは PETIT_CORE_IMAGE を上書きする(Phase 4)。
 services:

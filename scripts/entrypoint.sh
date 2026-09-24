@@ -26,7 +26,7 @@ else
 fi
 
 # --- 2. 家 API (m5-petit-app, FastAPI :8765) ---
-# petit-infra の Caddy が /house/* と /public/* をここ(house-0:8765)へ向ける。
+# petit-infra の Caddy が /house/* と /public/* をここ(petit-mio:8765)へ向ける。
 # クラウド版 SPA (TeamPuchi/petit-app) とは別物。詳細は scripts/sync-repos.sh のコメント。
 # 存在チェックはディレクトリではなく main.py で行う。イメージ側に .venv を先に掘ってある
 # (Dockerfile.core・T3 の匿名ボリューム用)ので、未同期でもディレクトリ自体は必ず存在するため。

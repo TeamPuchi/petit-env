@@ -44,7 +44,7 @@ fi
 
 # ---- petit-memory（記憶 MCP）----------------------------------------------
 # uv.lock の torch は Linux では CUDA 版（nvidia-*・cuda-*・triton で数 GB）を引く。
-# 家ホスト（t4g・GPU 無し）では使わないので、版は lock のまま CPU 版の wheel に差し替える。
+# EC2 ホスト（t4g・GPU 無し）では使わないので、版は lock のまま CPU 版の wheel に差し替える。
 # 他の依存は lock の版をそのまま（uv export）。
 if has petit-memory; then
   echo "[install-components] petit-memory (CPU 版 torch)"

@@ -90,8 +90,8 @@ RUN curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
 
 # ---- コンポーネントの焼き込み(K14・TODO T4) ----
 # vendor/ は scripts/vendor-components.sh が components.lock の固定 SHA から作る(git 管理外)。
-# 家ホスト(EC2)では build 時に GitHub へ取りに行かない(鍵を置かない。petit-infra README §9.11)。
-# 手元で vendor/ を詰めた束を petit-infra の upload-src → build で渡す(README「家コンテナへの焼き込み」)。
+# EC2 ホストでは build 時に GitHub へ取りに行かない(鍵を置かない。petit-infra README §9.11)。
+# 手元で vendor/ を詰めた束を petit-infra の upload-src → build で渡す(README「ぷちコンテナへの焼き込み」)。
 # PETIT_REQUIRE_COMPONENTS=1(既定)のとき、vendor/ が空なら build を落とす。dev compose は 0 を渡す。
 ARG PETIT_REQUIRE_COMPONENTS=1
 COPY --chown=petit:petit scripts/install-components.sh /opt/petit/build/install-components.sh
@@ -120,7 +120,7 @@ VOLUME ["/data", "/home/petit/.claude"]
 # 同パスの所有者・パーミッションを引き継ぐため、ここが無いとボリュームが root 所有で作られ、
 # 非root の petit が uv run で venv を作れなくなる。
 
-# 家 API(m5-petit-app)。petit-infra の Caddy が house-0:8765 へ向ける
+# 家 API(m5-petit-app)。petit-infra の Caddy が petit-mio:8765 へ向ける
 EXPOSE 8765
 
 # PID 1 は tini: claude・MCP サーバー・cron ジョブの孤児(ゾンビ)を回収し、SIGTERM を中継する

@@ -1,4 +1,4 @@
-# 家コンテナ（petit-core）に焼き込むコンポーネントの版（K14・TODO T4）
+# ぷちコンテナ（petit-core）に焼き込むコンポーネントの版（K14・TODO T4）
 #
 # scripts/vendor-components.sh がこの表を読み、各リポの「この SHA」を git archive で
 # vendor/<名前>/ に展開する。Dockerfile.core は vendor/ を COPY して venv を作る。
