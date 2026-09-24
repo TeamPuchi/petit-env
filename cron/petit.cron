@@ -18,6 +18,10 @@
 # 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
 5 4 * * * /opt/petit/scripts/run-for-each-character.sh memory-sleep >> /data/logs/memory-sleep-cron.log 2>&1
 
+# claude CLI の会話記録(~/.claude/projects 等)を消す: 毎日3:17、24時間より古いもの(K21)
+# 記憶は記憶 MCP が持つので、claude 側には残さない
+17 3 * * * /opt/petit/scripts/purge-claude-transcripts.sh >> /data/logs/purge-claude-cron.log 2>&1
+
 # 体験デーモン見張り: 5分ごと
 # Phase 1時点では体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しないため、
 # experience-watchdog.sh は対象ディレクトリが無ければ何もせずスキップする(将来の有効化に備えたプレースホルダー)
