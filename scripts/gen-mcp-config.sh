@@ -9,7 +9,7 @@
 #
 # 🔴 秘密（PETIT_SNS_INTERNAL_SECRET・ANTHROPIC_API_KEY・AWS の認証情報）はこのファイルに書かない。
 #    claude は MCP サーバーを自分の環境変数を引き継いで起動するので、コンテナの env
-#    （petit-infra の house-0.env・compose の environment:）からそのまま届く。
+#    （petit-infra の petit-mio.env・compose の environment:）からそのまま届く。
 #    ここの "env" に書くのは「ぷちごとに変わる、秘密でない値」だけ。
 #
 # 記憶の置き場:
@@ -51,7 +51,7 @@ gen_one() {
   store="$(memory_store)"
   table="${PETIT_MEMORY_DYNAMO_TABLE:-${PETIT_HOUSE_TABLE:-}}"
   # petit-memory の boto3 は AWS_REGION を読まず AWS_DEFAULT_REGION だけを見る（K14 で NoRegionError を確認）。
-  # petit-infra の house-0.env は AWS_REGION だけを渡すので、ここで写す。
+  # petit-infra の petit-mio.env は AWS_REGION だけを渡すので、ここで写す。
   region="${AWS_DEFAULT_REGION:-${AWS_REGION:-}}"
 
   local memory sns

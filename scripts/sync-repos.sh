@@ -44,7 +44,7 @@ sync_repo() {
 }
 
 sync_repo "petit-mcp"     "TeamPuchi/petit-mcp"     "${PETIT_MCP_BRANCH:-main}"
-# 家コンテナ内の HTTP サービス(:8765)。ここだけ m5- 接頭辞を残している。
+# ぷちコンテナ内の HTTP サービス(:8765)。ここだけ m5- 接頭辞を残している。
 # TeamPuchi/petit-app は別物(クラウド版の Vite+React SPA)で、S3/CloudFront に載る。
 # コンテナ内で動くのは従来の FastAPI(TeamPuchi/m5-petit-app)なので、
 # ディレクトリ名もリポジトリ名と揃えて m5-petit-app のままにする。

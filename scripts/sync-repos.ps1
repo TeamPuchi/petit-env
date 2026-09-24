@@ -50,7 +50,7 @@ function Get-BranchEnv($VarName, $Default) {
 }
 
 Sync-Repo "petit-mcp"     "TeamPuchi/petit-mcp"     (Get-BranchEnv "PETIT_MCP_BRANCH" "main")
-# 家コンテナ内の HTTP サービス(:8765)。TeamPuchi/petit-app は別物(クラウド版 SPA)。
+# ぷちコンテナ内の HTTP サービス(:8765)。TeamPuchi/petit-app は別物(クラウド版 SPA)。
 # 詳細は sync-repos.sh の同じ箇所のコメントを参照。
 Sync-Repo "m5-petit-app"  "TeamPuchi/m5-petit-app"  (Get-BranchEnv "PETIT_APP_BRANCH" "main")
 Sync-Repo "petit-memory"  "TeamPuchi/petit-memory"  (Get-BranchEnv "PETIT_MEMORY_BRANCH" "main")

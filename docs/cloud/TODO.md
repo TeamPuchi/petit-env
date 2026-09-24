@@ -16,8 +16,8 @@
 | T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み・実build確認済み(→T7) |
 | T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | K14で実装・amd64で家API起動とMCP一覧を確認。arm64実機は未確認 |
 | T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手。K7でCHARACTER_IDS欠落を再確認(petit-infra側の対応待ち) |
-| T6 | 🟡 | 家コンテナ `:8765` の正本を決める | 判断待ち |
-| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | cloud sandbox(amd64)で実施・完了。EC2実機(arm64)は未実施 |
+| T6 | 🟡 | ぷちコンテナ `:8765` の正本を決める | 判断待ち |
+| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | cloud sandbox(amd64)で実施・完了。 EC2実機(arm64)は未実施 |
 | T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | petit-env 側は適用済み。petit-infra 側が残 |
 | T9 | 🟡 | 小さな修正まとめ | 一部適用(`.dockerignore`・`grep -c`)。`VOLUME`・bind アドレスは残 |
 | T10 | ⚪ | 音声2件の fork | 未着手 |
@@ -96,8 +96,8 @@ T3 の方針どおり「結合テスト以降は焼き込み」なので、そ�
 
 - 方式: `components.lock`(固定 SHA)→ 手元の `scripts/vendor-components.sh` が `vendor/` に `git archive` →
   `Dockerfile.core` が `COPY vendor/` し、`scripts/install-components.sh` が venv を作る。
-  家ホストに GitHub の鍵を置かないため(petit-infra §9.11)、build 時の git clone はしない。
-  家ホストへは `--bundle` で作った束(petit-env HEAD ＋ vendor/ の1コミット)を petit-infra の `upload-src` で渡す。
+  EC2 ホストに GitHub の鍵を置かないため(petit-infra §9.11)、build 時の git clone はしない。
+  EC2 ホストへは `--bundle` で作った束(petit-env HEAD ＋ vendor/ の1コミット)を petit-infra の `upload-src` で渡す。
 - 焼き込むのは m5-petit-app(家 API)・petit-memory(記憶 MCP)・petit-sns の `sns-api/`(SNS-MCP)。
   petit-mcp・petit-desire・petit-scripts は未(クラウドでは機体は MQTT 経由。欲求は house 表)。
 - petit-memory の torch は CPU 版 wheel に差し替え(lock どおりだと CUDA 一式が入る)。venv 1.4GB、イメージ展開後 約3.3GB(amd64)。
@@ -106,7 +106,7 @@ T3 の方針どおり「結合テスト以降は焼き込み」なので、そ�
 - PID 1 を tini にし、entrypoint を `exec tail` から `wait` に変えた(終わった子がゾンビで残っていた)。
 - petit-memory の boto3 は `AWS_REGION` を読まない(`NoRegionError` を実測)ため、生成する MCP 設定で `AWS_DEFAULT_REGION` に写す。
 
-確認(cloud sandbox・amd64、petit-infra の `house-0.env.example` をほぼそのまま食わせて):
+確認(cloud sandbox・amd64、petit-infra の `petit-mio.env.example` をほぼそのまま食わせて):
 `/petits` 秘密なし→403・秘密あり＆アカウントなし→401、MQTT は証明書が無くても家 API を落とさず再接続を繰り返す、
 `claude mcp list` で `memory`・`petit-sns` が Connected、`docker stop` が即時に終わる、ゾンビ無し。
 
@@ -118,7 +118,7 @@ T3 の方針どおり「結合テスト以降は焼き込み」なので、そ�
 「petit-core イメージは petit-env の `Dockerfile.core` を build して作る」と書いている一方、
 渡す環境変数の形が噛み合っていない。
 
-| | petit-env | petit-infra (`compose/houses/house-0.env.example`) |
+| | petit-env | petit-infra (`compose/petits/petit-mio.env.example`) |
 |---|---|---|
 | 機体の指定 | `M5_HOSTS_<ID大文字>`（キャラごと） | `M5_HOST`（家ごと・IoT Core 経由なら空） |
 | MQTT | **無し** | `PETIT_IOT_ENDPOINT` |
@@ -132,20 +132,20 @@ T3 の方針どおり「結合テスト以降は焼き込み」なので、そ�
 認証も、petit-infra 側は家ごとに API キーを SSM から配る設計なので、
 監査で「家ごとに `claude login` の手動実行が要る」と書いた懸念はこちらで解消される見込み。
 
-**done**: petit-infra の `house-0.env` をそのまま食わせてコンテナが起動すること。
+**done**: petit-infra の `petit-mio.env` をそのまま食わせてコンテナが起動すること。
 
-## T6 🟡 家コンテナ `:8765` の正本を決める
+## T6 🟡 ぷちコンテナ `:8765` の正本を決める
 
 `TeamPuchi/petit-app` は**クラウド版の Vite + React SPA**（`src/screens/*.tsx`、`dist-rel/` にビルド成果物）で、
 `main.py` も `pyproject.toml` も無い。petit-infra の `50-web-hosting`（S3/CloudFront）に載る側。
 
-一方 petit-infra の `compose/docker-compose.yml` は house-0 に `expose: 8765` を置き、
+一方 petit-infra の `compose/docker-compose.yml` は petit-mio に `expose: 8765` を置き、
 Caddy 経由で API Gateway（`60-api.yaml`）から引く構成になっている。
 つまり**コンテナ側にも HTTP の口が要る**。現状それに当たるのは従来の FastAPI（`TeamPuchi/m5-petit-app`）。
 
 そのため `repos/` の配置先はここだけ `m5-petit-app` のままにしてある。
 
-**決めること**: クラウド版で家コンテナの `:8765` を
+**決めること**: クラウド版でぷちコンテナの `:8765` を
 (a) `m5-petit-app` のまま使い続ける / (b) 新しい house API に置き換える / (c) SPA からの要求に合わせて作り直す。
 
 ## T7 🔴 EC2(t4g) で実 build と起動確認・EBS サイジング
@@ -182,7 +182,7 @@ arm64バイナリを動かせなかった)。そのため**amd64で代替検証*
 - image size: `docker images` 表示で 1.22GB(amd64)
 - `docker compose up -d` → 起動・supercronicがcrontab読み込み。1分間隔のテストcrontabで実際にジョブが発火・成功することも確認(本番crontabは最短5分間隔のため、実発火はテスト用crontabで代替確認)
 - `.venv` は `petit:petit` 所有・`uv run` 成功・ホスト側 `repos/petit-memory/.venv` は空 ✅(T3)
-- なお、サンドボックスの透過proxyがTLS終端しておりcurl/npmが証明書検証で落ちたため、検証専用にproxyのCAをinstallするステップを**一時的にのみ**Dockerfileへ足して確認した(コミットはしていない。家ホスト/EC2は通常のインターネット直結なので、このワークアラウンドは不要と見込み)
+- なお、サンドボックスの透過proxyがTLS終端しておりcurl/npmが証明書検証で落ちたため、検証専用にproxyのCAをinstallするステップを**一時的にのみ**Dockerfileへ足して確認した(コミットはしていない。 EC2 ホスト/EC2は通常のインターネット直結なので、このワークアラウンドは不要と見込み)
 
 **残作業**: EC2実機(t4g.small・arm64)での実 build・起動確認、EBSサイジング実測。
 

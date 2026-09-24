@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 家コンテナ（petit-core）に焼き込むコンポーネントを vendor/ に展開する（K14・TODO T4）。
+# ぷちコンテナ（petit-core）に焼き込むコンポーネントを vendor/ に展開する（K14・TODO T4）。
 #
 #   ./scripts/vendor-components.sh
 #       components.lock の各行について、そのリポの「固定した SHA」を vendor/<名前>/ に展開する。
@@ -8,11 +8,11 @@
 #       上に加えて、「petit-env の HEAD ＋ vendor/」を1つの git リポ（コミット1つ）にまとめる。
 #       petit-infra の `house-compose-deploy.sh upload-src <出力ディレクトリ> petit-core` が
 #       そのまま束ねられる形（upload-src は HEAD を git archive するため、vendor/ を
-#       コミットに含める必要がある）。家ホストに GitHub の鍵を置かずに済む。
+#       コミットに含める必要がある）。 EC2 ホストに GitHub の鍵を置かずに済む。
 #
-# 取り込み方式（2026-09-24 決定）: build 時に家ホストから git clone するのではなく、
+# 取り込み方式（2026-09-24 決定）: build 時に EC2 ホストから git clone するのではなく、
 # GitHub に触れる手元（社長 PC）で固定 SHA を取り出し、build context に入れて渡す。
-# 理由: m5-petit-app・petit-sns は private で、家ホスト（EC2）に読み取りトークンを置かない方針
+# 理由: m5-petit-app・petit-sns は private で、 EC2 ホストに読み取りトークンを置かない方針
 # （petit-infra README §9.11）。SSM send-command でトークンを渡すと実行履歴に残る。
 #
 # 認証は手元の git に任せる（Git Credential Manager・gh auth 等）。このスクリプトは秘密を扱わない。
@@ -84,7 +84,7 @@ if [[ -z "$BUNDLE_DIR" ]]; then
   exit 0
 fi
 
-# ---- 家ホストへ渡す束（petit-env の HEAD ＋ vendor/）------------------------
+# ---- EC2 ホストへ渡す束（petit-env の HEAD ＋ vendor/）------------------------
 if [[ -n "$("${GIT[@]}" -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]]; then
   printf '\033[33m[warn]\033[0m petit-env に未コミットの変更がある。束に入るのは HEAD の内容だけ\n' >&2
 fi
@@ -107,7 +107,7 @@ rm -f "$BUNDLE_DIR/.gitignore"
 
 cat <<EOS
 
-  束ができた（petit-env@${rev}＋components.lock の版）。petit-infra から家ホストへ渡す:
+  束ができた（petit-env@${rev}＋components.lock の版）。petit-infra から EC2 ホストへ渡す:
 
     ./scripts/house-compose-deploy.sh upload-src ${BUNDLE_DIR} petit-core
     ./scripts/house-compose-deploy.sh build <上で出た S3 URI> petit-core:latest . Dockerfile.core
