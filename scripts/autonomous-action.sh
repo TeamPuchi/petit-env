@@ -99,6 +99,37 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# --- はじめての日のチュートリアル(2026-09-27) ---
+# ぷちは里親とのチュートリアル(まいぷち。の会話画面でお題に沿って話す)が済むまで自律行動しない。
+# 状態は家 API と同じ house 表の STATE#TUTORIAL。判定は家 API の scripts/tutorial_state.py <id> gate:
+#   0 = 達成済み → 続ける / 3 = 未完了 → 何もせず抜ける / それ以外 = 読めない → 今回は抜ける(20分後にまた見る)
+# 欲求の更新(cron の desire ジョブ)はここを通らないので止まらない。
+# 対象外: 手で渡すプロンプト(-p / --test-prompt)・家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
+#   関所の入っていない古い家 API・PETIT_TUTORIAL_GATE=0。
+HOUSE_API_DIR="$REPOS_DIR/m5-petit-app"
+TUTORIAL_GATE="$HOUSE_API_DIR/scripts/tutorial_state.py"
+if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] \
+   && [ "${PETIT_TUTORIAL_GATE:-1}" != "0" ] && [ -f "$TUTORIAL_GATE" ]; then
+  if [ -x "$HOUSE_API_DIR/.venv/bin/python" ]; then
+    TUTORIAL_PY=("$HOUSE_API_DIR/.venv/bin/python")                 # 焼き込み済み
+  else
+    TUTORIAL_PY=(uv run --directory "$HOUSE_API_DIR" python)        # dev
+  fi
+  TUTORIAL_OUT=$(timeout 30 "${TUTORIAL_PY[@]}" "$TUTORIAL_GATE" "$CHARACTER_ID" gate 2>>"$LOG_FILE")
+  TUTORIAL_CODE=$?
+  case "$TUTORIAL_CODE" in
+    0) ;;
+    3)
+      echo "チュートリアル未完了のため自律行動しない ($TUTORIAL_OUT)" >> "$LOG_FILE"
+      exit 0
+      ;;
+    *)
+      echo "チュートリアルの状態を読めないので今回は自律行動しない (exit=$TUTORIAL_CODE $TUTORIAL_OUT)" >> "$LOG_FILE"
+      exit 0
+      ;;
+  esac
+fi
+
 # --- 日時の取得(コンテナは常にLinuxなので date -d のみ対応) ---
 if [ -n "$OVERRIDE_DATE" ]; then
   CURRENT_DATE=$(date -d "$OVERRIDE_DATE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
