@@ -359,9 +359,10 @@ elif [ -n "$TEST_PROMPT_FILE" ]; then
 fi
 
 # MCP 設定は2枚重ねる(K14):
-#   1. 生成分 /opt/petit/run/mcp/<id>.json … 記憶 MCP・SNS-MCP(entrypoint が起動時に作る)
-#   2. キャラ固有 $CHARACTER_DIR/config/autonomous-mcp.json … m5-mcp・desire-system など(あれば)
-# 名前(memory・petit-sns)が重なる定義はキャラ固有側に書かない。
+#   1. 生成分 /opt/petit/run/mcp/<id>.json … 記憶 MCP・SNS-MCP・欲求 MCP(desire-system。petit-desire があるとき)
+#      (entrypoint が起動時に gen-mcp-config.sh で作る)
+#   2. キャラ固有 $CHARACTER_DIR/config/autonomous-mcp.json … m5-mcp など(あれば)
+# 名前(memory・petit-sns・desire-system)が重なる定義はキャラ固有側に書かない。
 MCP_CONFIGS=()
 GEN_MCP_CONFIG="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
 [ -f "$GEN_MCP_CONFIG" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >> "$LOG_FILE" 2>&1 || true

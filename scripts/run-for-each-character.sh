@@ -46,7 +46,8 @@ for c in "${CHARS[@]}"; do
         else
           DESIRE_CMD=(uv run --directory "$REPOS_DIR/petit-desire" desire-updater)   # dev
         fi
-        env "${DESIRE_ENV[@]}" "${DESIRE_CMD[@]}" "$CHARACTER_ID"
+        # 表・SNS が詰まっても次の回（5分後）と重ならないよう打ち切る（autonomous-action.sh の desire-status と同じ形）
+        env "${DESIRE_ENV[@]}" timeout 60 "${DESIRE_CMD[@]}" "$CHARACTER_ID"
       else
         echo "[run-for-each-character] $REPOS_DIR/petit-desire が未同期。desireスキップ (character=$CHARACTER_ID)" >&2
       fi
