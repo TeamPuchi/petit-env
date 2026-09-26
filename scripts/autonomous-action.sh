@@ -263,6 +263,9 @@ ${PERMISSION_RULES}}
 
 mkdir -p "$LOG_DIR"
 find "$LOG_DIR" -name "*.log" -mtime "+$LOG_RETENTION_DAYS" -delete 2>/dev/null
+# K28: 以前は claude の stream-json（会話・ツール引数＝記憶の本文を含む）を *_stream.jsonl としてここに残していた。
+# 本文をログに残さない方針なので、残っているものは年齢に関係なく消す。
+find "$LOG_DIR" -name "*_stream.jsonl" -delete 2>/dev/null
 
 echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$LOG_FILE"
 
@@ -366,7 +369,11 @@ else
   fi
   CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" --allowedTools "$ALLOWED_TOOLS")
 
-  STREAM_FILE="${LOG_FILE%.log}_stream.jsonl"
+  # K28: stream-json には会話の本文・ツールの引数（remember の本文など）がそのまま入る。
+  # /data/logs（ボリューム＝バックアップ・スナップショットの対象になりうる）には置かず、
+  # 一時ファイルに受けて、要る数値（session_id・回数・費用・成否）だけを取り出したら消す。
+  STREAM_FILE="$(mktemp "${TMPDIR:-/tmp}/petit-stream.XXXXXX")"
+  trap 'rm -f "$STREAM_FILE"' EXIT
 
   run_new_session() {
     echo "[新規セッション作成]" >> "$LOG_FILE"
@@ -377,7 +384,13 @@ else
   finalize_session() {
     local run_type="$1"
     RESULT_JSON=$(grep -m1 '"type":"result"' "$STREAM_FILE" 2>/dev/null || echo "{}")
-    cat "$STREAM_FILE" >> "$LOG_FILE" 2>/dev/null
+    # 本文（result の文面・会話）はログに写さない。成否と種類だけ残す
+    local subtype is_error
+    subtype=$(echo "$RESULT_JSON" | jq -r '.subtype // "none"' 2>/dev/null)
+    is_error=$(echo "$RESULT_JSON" | jq -r '.is_error // false' 2>/dev/null)
+    echo "[result] subtype=$subtype is_error=$is_error lines=$(wc -l < "$STREAM_FILE" 2>/dev/null || echo 0)" >> "$LOG_FILE"
+    # JSON でない行（claude 自体のエラー・認証切れなど）だけは、原因を追えるよう先頭 5 行を短く残す
+    grep -v '^{' "$STREAM_FILE" 2>/dev/null | head -n 5 | cut -c1-300 | sed 's/^/[stderr] /' >> "$LOG_FILE"
     NEW_SESSION_ID=$(echo "$RESULT_JSON" | jq -r '.session_id // empty' 2>/dev/null)
     if [ -n "$NEW_SESSION_ID" ]; then
       echo "$NEW_SESSION_ID" > "$SESSION_FILE"
