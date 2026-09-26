@@ -7,14 +7,6 @@
         "M5_HOST": "192.168.1.50",
         "CHARACTER_ID": "alice"
       }
-    },
-    "desire-system": {
-      "command": "uv",
-      "args": ["run", "--directory", "/opt/petit/repos/petit-desire", "python", "server.py"],
-      "env": {
-        "CHARACTER_ID": "alice",
-        "PETIT_DATA_DIR": "/data"
-      }
     }
   }
 }

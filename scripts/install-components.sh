@@ -10,7 +10,7 @@ set -euo pipefail
 
 REPOS_DIR="${1:?repos dir}"
 REQUIRE="${2:-1}"
-REQUIRED_COMPONENTS=(m5-petit-app petit-memory petit-sns)
+REQUIRED_COMPONENTS=(m5-petit-app petit-memory petit-sns petit-desire)
 
 export UV_PYTHON=python3          # ubuntu 24.04 の python3.12 を使う（別の Python を落としてこない）
 export UV_PYTHON_DOWNLOADS=never
@@ -40,6 +40,14 @@ fi
 if has petit-sns; then
   echo "[install-components] petit-sns (SNS-MCP)"
   (cd "$REPOS_DIR/petit-sns" && uv sync --frozen --no-dev --extra mcp)
+fi
+
+# ---- petit-desire（欲求エンジン・欲求 MCP。2026-09-26）----------------------
+# desire-updater（5 分ごと）・desire-system（MCP）・desire-status（自律行動のプロンプト）の3つ。
+if has petit-desire; then
+  echo "[install-components] petit-desire"
+  (cd "$REPOS_DIR/petit-desire" && uv sync --frozen --no-dev)
+  "$REPOS_DIR/petit-desire/.venv/bin/python" -c "import petit_desire.server, petit_desire.cli; print('petit-desire ok')"
 fi
 
 # ---- petit-memory（記憶 MCP）----------------------------------------------

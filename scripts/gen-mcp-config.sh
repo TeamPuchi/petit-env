@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude CLI に渡す MCP 設定（記憶 MCP・SNS-MCP）を CHARACTER_IDS のぷちごとに作る（K14）。
+# claude CLI に渡す MCP 設定（記憶 MCP・SNS-MCP・欲求 MCP）を CHARACTER_IDS のぷちごとに作る（K14）。
 #
 #   gen-mcp-config.sh            → $PETIT_MCP_DIR/<id>.json を CHARACTER_IDS 全員ぶん書く
 #   gen-mcp-config.sh <id>       → そのぷちの分だけ書く
@@ -17,6 +17,12 @@
 #   無ければ sqlite（/data/characters/<id>/memory.db。手元・dev 用）。
 #   表名は PETIT_MEMORY_DYNAMO_TABLE、無ければ PETIT_HOUSE_TABLE。
 #   PETIT_MEMORY_HOUSE_ID は渡さない（空＝ pk が P#<pid>。アカウント根・2026-09-23）。
+#
+# 欲求（desire-system。petit-desire があるときだけ載せる・2026-09-26）:
+#   PETIT_HOUSE_TABLE があれば家の表の STATE#DESIRES、無ければ /data/characters/<id>/data/desires.json。
+#   ここで渡すのは CHARACTER_ID・記憶の置き場（記憶 MCP と同じ値）・boto3 のリージョンだけ。
+#   鍵の表・KMS・SNS の URL と秘密はコンテナの env をそのまま読む（petit-desire petit_desire/service.py の表）。
+#   run-for-each-character.sh の desire（5 分ごとの更新）もこの env を使う（置き場の決め方を1か所に）。
 set -euo pipefail
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
@@ -66,11 +72,24 @@ gen_one() {
     --arg state "$PETIT_DATA_DIR/sns/$id" '
     .env = {PETIT_ID: $id, PETIT_SNS_URL: $url, PETIT_SNS_STATE_DIR: $state}')"
 
+  # 欲求 MCP（petit-desire が焼き込まれている／dev でマウントされているときだけ）。
+  # 記憶の置き場は記憶 MCP と同じ値を渡す（どの記憶を見て「満たされた」と数えるかを揃える）
+  local desire="null"
+  if [[ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]]; then
+    desire="$(server_cmd "$REPOS_DIR/petit-desire" desire-system | jq \
+      --arg store "$store" --arg table "$table" --arg region "$region" --arg id "$id" \
+      --arg data "$PETIT_DATA_DIR" --arg db "$PETIT_DATA_DIR/characters/$id/memory.db" '
+      .env = ({CHARACTER_ID: $id, PETIT_DATA_DIR: $data, PETIT_MEMORY_STORE: $store, MEMORY_DB_PATH: $db}
+              + (if $table != "" then {PETIT_MEMORY_DYNAMO_TABLE: $table} else {} end)
+              + (if $region != "" then {AWS_DEFAULT_REGION: $region} else {} end))')"
+  fi
+
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
-  jq -n --argjson m "$memory" --argjson s "$sns" \
-    '{mcpServers: {memory: $m, "petit-sns": $s}}' > "$OUT_DIR/$id.json.tmp"
+  jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" \
+    '{mcpServers: ({memory: $m, "petit-sns": $s} + (if $d != null then {"desire-system": $d} else {} end))}' \
+    > "$OUT_DIR/$id.json.tmp"
   mv "$OUT_DIR/$id.json.tmp" "$OUT_DIR/$id.json"
-  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table})"
+  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off))"
 }
 
 if [[ -n "${1:-}" ]]; then

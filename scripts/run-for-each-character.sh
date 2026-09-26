@@ -15,7 +15,7 @@ if [ -z "$JOB" ]; then
 fi
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
-REPOS_DIR="/opt/petit/repos"
+REPOS_DIR="${PETIT_REPOS_DIR:-/opt/petit/repos}"
 
 IFS=',' read -ra CHARS <<< "${CHARACTER_IDS:-}"
 if [ "${#CHARS[@]}" -eq 0 ] || [ -z "${CHARS[0]}" ]; then
@@ -32,11 +32,21 @@ for c in "${CHARS[@]}"; do
       /opt/petit/scripts/autonomous-action.sh "$CHARACTER_ID"
       ;;
     desire)
-      if [ -f "$REPOS_DIR/petit-desire/desire_updater.py" ]; then
-        (
-          cd "$REPOS_DIR/petit-desire" && \
-          PETIT_DATA_DIR="$PETIT_DATA_DIR" uv run python desire_updater.py "$CHARACTER_ID"
-        )
+      if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
+        # 欲求 MCP（desire-system）と同じ置き場を見る。gen-mcp-config.sh が作った env をそのまま使う
+        # （家の表 STATE#DESIRES か desires.json か・記憶の置き場の決め方を1か所にするため。memory-sleep と同じ）。
+        MCP_JSON="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
+        [ -f "$MCP_JSON" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >&2
+        mapfile -t DESIRE_ENV < <(jq -r '.mcpServers["desire-system"].env // {} | to_entries[] | "\(.key)=\(.value)"' "$MCP_JSON" 2>/dev/null | tr -d '\r')
+        if [ "${#DESIRE_ENV[@]}" -eq 0 ]; then
+          DESIRE_ENV=("CHARACTER_ID=$CHARACTER_ID" "PETIT_DATA_DIR=$PETIT_DATA_DIR")
+        fi
+        if [ -x "$REPOS_DIR/petit-desire/.venv/bin/desire-updater" ]; then
+          DESIRE_CMD=("$REPOS_DIR/petit-desire/.venv/bin/desire-updater")   # 焼き込み済み
+        else
+          DESIRE_CMD=(uv run --directory "$REPOS_DIR/petit-desire" desire-updater)   # dev
+        fi
+        env "${DESIRE_ENV[@]}" "${DESIRE_CMD[@]}" "$CHARACTER_ID"
       else
         echo "[run-for-each-character] $REPOS_DIR/petit-desire が未同期。desireスキップ (character=$CHARACTER_ID)" >&2
       fi

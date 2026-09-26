@@ -5,6 +5,8 @@
 # 版を上げるときはこの表の SHA だけを書き換えて PR にする（ブランチ名ではなく SHA で固定）。
 #
 # 列: 名前（/opt/petit/repos/<名前> になる） リポジトリ SHA リポ内のディレクトリ（. = 全体）
-m5-petit-app  TeamPuchi/m5-petit-app  6303985ebdf141a73a07df6f58d61ecb8714cf7f  .
+# m5-petit-app は 2026-09-26 に TeamPuchi/petit-api へ改名した。名前の列（コンテナ内のパス）は据え置く。
+m5-petit-app  TeamPuchi/petit-api      6303985ebdf141a73a07df6f58d61ecb8714cf7f  .
 petit-memory  TeamPuchi/petit-memory  a0fc5722479e5a95003a8b2fbdc7f035927bc5c7  .
 petit-sns     TeamPuchi/petit-sns     8eeb32f20ff7c18c04ec09c5ea89d3212262d05a  sns-api
+petit-desire  TeamPuchi/petit-desire  e8379da352022280fc3ea58585ea690c7c1e61e0  .

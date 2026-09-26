@@ -99,7 +99,10 @@ T3 の方針どおり「結合テスト以降は焼き込み」なので、そ�
   EC2 ホストに GitHub の鍵を置かないため(petit-infra §9.11)、build 時の git clone はしない。
   EC2 ホストへは `--bundle` で作った束(petit-env HEAD ＋ vendor/ の1コミット)を petit-infra の `upload-src` で渡す。
 - 焼き込むのは m5-petit-app(家 API)・petit-memory(記憶 MCP)・petit-sns の `sns-api/`(SNS-MCP)。
-  petit-mcp・petit-desire・petit-scripts は未(クラウドでは機体は MQTT 経由。欲求は house 表)。
+  petit-mcp・petit-scripts は未(クラウドでは機体は MQTT 経由)。
+- 2026-09-26: petit-desire(欲求エンジン・欲求 MCP)を4つ目として焼き込む。house 表の `STATE#DESIRES` を読み書きする
+  クラウド版に作り直した(petit-desire `petit_desire/`)。5分ごとの更新・`desire-system` の MCP 設定の生成・
+  自律行動のプロンプトへの「いまの気分」の差し込みまで。
 - petit-memory の torch は CPU 版 wheel に差し替え(lock どおりだと CUDA 一式が入る)。venv 1.4GB、イメージ展開後 約3.3GB(amd64)。
 - `vendor/` が空だと build が落ちる(`PETIT_REQUIRE_COMPONENTS=1`)。dev compose は 0。
 - MCP 設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` ごとに生成(秘密は書かない。env 継承を実測)。

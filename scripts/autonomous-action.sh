@@ -15,7 +15,7 @@
 set -u
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
-REPOS_DIR="/opt/petit/repos"
+REPOS_DIR="${PETIT_REPOS_DIR:-/opt/petit/repos}"
 
 CHARACTER_ID="${1:-}"
 if [ -z "$CHARACTER_ID" ] || [[ "$CHARACTER_ID" == -* ]]; then
@@ -241,6 +241,42 @@ if [ -d "$MAILBOX_DIR" ] && [ -f "$SCRIPTS_DIR/list_unread_mail.py" ]; then
   fi
 fi
 
+# --- いまの気分(欲求) ---
+# petit-desire(欲求エンジン)があれば、今の欲求をプロンプトに差し込む(get_desires と同じ中身)。
+# 置き場(家の表 STATE#DESIRES / desires.json)は欲求 MCP と同じ env で決める(gen-mcp-config.sh)。
+# 行が古ければ(cron が止まっていた等)その場で更新してから出す。dry-run では書かない(--no-refresh)。
+# 取れなくても自律行動は止めない(get_desires ツールは残っている)。
+DESIRE_SECTION=""
+GEN_MCP_CONFIG="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
+if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
+  [ -f "$GEN_MCP_CONFIG" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >> "$LOG_FILE" 2>&1 || true
+  mapfile -t DESIRE_ENV < <(jq -r '.mcpServers["desire-system"].env // {} | to_entries[] | "\(.key)=\(.value)"' "$GEN_MCP_CONFIG" 2>/dev/null | tr -d '\r')
+  [ "${#DESIRE_ENV[@]}" -gt 0 ] || DESIRE_ENV=("CHARACTER_ID=$CHARACTER_ID" "PETIT_DATA_DIR=$PETIT_DATA_DIR")
+  if [ -x "$REPOS_DIR/petit-desire/.venv/bin/desire-status" ]; then
+    DESIRE_STATUS_CMD=("$REPOS_DIR/petit-desire/.venv/bin/desire-status")
+  else
+    DESIRE_STATUS_CMD=(uv run --directory "$REPOS_DIR/petit-desire" desire-status)
+  fi
+  DESIRE_ARGS=("$CHARACTER_ID" --compact)
+  [ "$DRY_RUN" = true ] && DESIRE_ARGS+=(--no-refresh)
+  DESIRE_STATUS=$(env "${DESIRE_ENV[@]}" timeout 60 "${DESIRE_STATUS_CMD[@]}" "${DESIRE_ARGS[@]}" 2>>"$LOG_FILE")
+  if [ -n "$DESIRE_STATUS" ]; then
+    # ログに残すのは欲求の名前と値だけ(本文は含まれない)
+    echo "[desire] $(echo "$DESIRE_STATUS" | head -n 3 | tr '\n' ' ')" >> "$LOG_FILE"
+    if [ "$ROUTINE_RAND" -lt 20 ]; then
+      DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
+    else
+      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+- やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
+- 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
+    fi
+    DESIRE_SECTION="## いまの気分(欲求)
+${DESIRE_STATUS}
+
+${DESIRE_RULE}"
+  fi
+fi
+
 PROMPT="自律行動タイム(Heartbeat)
 
 現在の日時: ${CURRENT_DATE}
@@ -250,7 +286,9 @@ PROMPT="自律行動タイム(Heartbeat)
 ${DIARY_SUMMARY_LINE}
 
 ${ROUTINE_MODE}
-
+${DESIRE_SECTION:+
+${DESIRE_SECTION}
+}
 ## 補足ルール
 - ${TIME_RULE}
 - 人がいないことはよくある

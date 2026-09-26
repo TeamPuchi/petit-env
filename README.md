@@ -103,16 +103,17 @@ docker compose exec core claude login
 | # | コンポーネント | 動き方 |
 |---|---|---|
 | 1 | claude CLI + 自律行動 | supercronicが20分ごとに実行 |
-| 2 | MCPサーバー群(memory / petit-sns は自動生成、m5-mcp / desire-system はキャラ固有設定) | claude CLIが都度spawn |
+| 2 | MCPサーバー群(memory / petit-sns / desire-system は自動生成、m5-mcp はキャラ固有設定) | claude CLIが都度spawn |
 | 3 | 家 API(m5-petit-app, FastAPI :8765。petit-infra の Caddy が `/house/*` をここへ) | コンテナ内で常駐(落ちたら起こし直す) |
-| 4 | 欲求システム更新・記憶整理 | supercronicに集約 |
+| 4 | 欲求システム更新(5分ごと・petit-desire の `desire-updater`)・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 | 6 | claude CLI の会話記録の消去(K21) | supercronicが毎日、`~/.claude/projects` 等の24時間より古いものを消す(`scripts/purge-claude-transcripts.sh`) |
 
 > **claude CLI の会話記録は残さない**(K21・2026-09-24)。記憶は記憶 MCP(petit-memory。忘れる＝鍵ごと消す)が持つので、`~/.claude`(ボリューム `petit-claude-auth-<pid>`)の `projects/*.jsonl`・`history.jsonl` などは毎日24時間より古いものを消す。認証(`.credentials.json`)と設定は消さない。
 
 > 記憶 MCP(`memory`)と SNS-MCP(`petit-sns`)の設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` のぷちごとに `/opt/petit/run/mcp/<id>.json` へ作る(秘密は書かない。`PETIT_SNS_INTERNAL_SECRET`・`ANTHROPIC_API_KEY`・AWS の認証情報はコンテナの env から claude 経由で MCP に引き継がれる)。`PETIT_HOUSE_TABLE` があれば記憶は DynamoDB(pk `P#<pid>`)、無ければ `/data/characters/<id>/memory.db`。
-> それ以外の MCP サーバー(機体・欲求など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
+> 欲求 MCP(`desire-system`・petit-desire)も同じく自動生成する(2026-09-26)。`PETIT_HOUSE_TABLE` があれば家の表の `STATE#DESIRES`(家 API の `GET /petits/{pid}/mood` が読む行)、無ければ `/data/characters/<id>/data/desires.json`。5分ごとの更新(`run-for-each-character.sh desire`)と、自律行動のプロンプトに差し込む「いまの気分」(`desire-status`)も同じ env を使う。欲求の定義はキャラの `config/desire_config.json`、無ければ petit-desire の既定(仮置き)。
+> それ以外の MCP サーバー(機体など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns`・`desire-system` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
 
 ### コンポーネントのコードをどう渡すか(dev と release)
 
@@ -219,7 +220,7 @@ M5デバイスとの接続はIP指定を基本とします(コンテナ内から
 - **ビルド確認済み(K7・2026-09-23)**。`docker build` / `docker compose up` は通り、supercronic・claude CLIの起動・cronジョブの発火・T3の匿名ボリューム所有権を確認済みです(cloud sandbox・amd64での代替検証。実機arm64での確認は未実施 → [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) T7)
 - **notes-mcp / relations-mcp はまだ含まれていません**。この2つのMCPサーバーのリポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(用意でき次第、追加予定)
 - **体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しません**。`scripts/experience-watchdog.sh` は対象ディレクトリが見つからなければ何もせずスキップする、将来のためのプレースホルダーです
-- `docker-compose.release.yml` / `release/*` は雛形です。 EC2 ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「EC2 ホストでの petit-core イメージの build」参照・レジストリは未導入)。焼き込むのは m5-petit-app・petit-memory・petit-sns(SNS-MCP)の3つだけで、petit-mcp・petit-desire・petit-scripts はまだ焼き込んでいません(クラウドでは機体は MQTT 経由のため)
+- `docker-compose.release.yml` / `release/*` は雛形です。 EC2 ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「EC2 ホストでの petit-core イメージの build」参照・レジストリは未導入)。焼き込むのは m5-petit-app(リポは TeamPuchi/petit-api)・petit-memory・petit-sns(SNS-MCP)・petit-desire(欲求。2026-09-26 から)の4つで、petit-mcp・petit-scripts はまだ焼き込んでいません(クラウドでは機体は MQTT 経由のため)
 - **EC2での実運用側の compose は [petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml` が正本**です。このリポジトリの compose 2本は開発用・雛形として残しています
 - **petit-env ↔ petit-infra の環境変数**(T5): `CHARACTER_IDS` は petit-infra 側で入りました。K14 で petit-mio.env(雛形)をそのまま食わせて家 API が起動することを確認済み。残りは docs/cloud/TODO.md の T5
 
