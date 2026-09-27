@@ -107,15 +107,16 @@ done
 # 対象外: 手で渡すプロンプト(-p / --test-prompt)・家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
 #   関所の入っていない古い家 API・PETIT_TUTORIAL_GATE=0。
 HOUSE_API_DIR="$REPOS_DIR/m5-petit-app"
+# 家 API の scripts/*.py を動かす python(チュートリアルの関所・未読の手紙の件数で使う)
+if [ -x "$HOUSE_API_DIR/.venv/bin/python" ]; then
+  HOUSE_PY=("$HOUSE_API_DIR/.venv/bin/python")                 # 焼き込み済み
+else
+  HOUSE_PY=(uv run --directory "$HOUSE_API_DIR" python)        # dev
+fi
 TUTORIAL_GATE="$HOUSE_API_DIR/scripts/tutorial_state.py"
 if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] \
    && [ "${PETIT_TUTORIAL_GATE:-1}" != "0" ] && [ -f "$TUTORIAL_GATE" ]; then
-  if [ -x "$HOUSE_API_DIR/.venv/bin/python" ]; then
-    TUTORIAL_PY=("$HOUSE_API_DIR/.venv/bin/python")                 # 焼き込み済み
-  else
-    TUTORIAL_PY=(uv run --directory "$HOUSE_API_DIR" python)        # dev
-  fi
-  TUTORIAL_OUT=$(timeout 30 "${TUTORIAL_PY[@]}" "$TUTORIAL_GATE" "$CHARACTER_ID" gate 2>>"$LOG_FILE")
+  TUTORIAL_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$TUTORIAL_GATE" "$CHARACTER_ID" gate 2>>"$LOG_FILE")
   TUTORIAL_CODE=$?
   case "$TUTORIAL_CODE" in
     0) ;;
@@ -255,20 +256,20 @@ if [ -f "$CHARACTER_DIR/diary_summary.md" ]; then
   DIARY_SUMMARY_LINE="@${CHARACTER_DIR}/diary_summary.md"
 fi
 
-# メールボックス連携は petit-scripts が同梱されていれば使う。
-# 未同期でも自律行動自体は壊さない。
-SCRIPTS_DIR="$REPOS_DIR/petit-scripts"
-MAILBOX_DIR="$PETIT_DATA_DIR/mailbox"
+# --- 未読の手紙(2026-09-27) ---
+# 手紙は家 API と同じ house 表の MAIL#。自分宛ての未読の件数を家 API の
+# scripts/read_mailbox.py <id> --unread --count(件数1行だけ・既読にしない)で数え、あれば
+# house の mail_read で読むよう知らせる。家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
+# --count の無い古い家 API・読めないときは知らせを出さないだけで、自律行動は続ける。
 MAILBOX_NOTICE=""
-if [ -d "$MAILBOX_DIR" ] && [ -f "$SCRIPTS_DIR/list_unread_mail.py" ]; then
-  # grep -c は 0件でも標準出力に "0" を出したうえで終了ステータス 1 を返す。
-  # そのため `|| echo 0` だと 0件のときだけ出力が "0\n0" の2行になり、直後の -gt が
-  # 数値比較に失敗していた(エラーを 2>/dev/null に捨てて比較が偽になるので、
-  # 結果だけは意図どおりに見えていた)。`|| true` なら grep の出力(必ず1行の数値)が残る。
-  UNREAD_COUNT=$(python3 "$SCRIPTS_DIR/list_unread_mail.py" "$CHARACTER_ID" 2>/dev/null | grep -c "^  from_\|^  to_" || true)
-  if [ "$UNREAD_COUNT" -gt 0 ]; then
-    MAILBOX_NOTICE="## メールボックス
-未読メールが ${UNREAD_COUNT} 件ある。Bashツールで python3 $SCRIPTS_DIR/list_unread_mail.py $CHARACTER_ID を実行して確認。"
+READ_MAILBOX="$HOUSE_API_DIR/scripts/read_mailbox.py"
+if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$READ_MAILBOX" ]; then
+  UNREAD_COUNT=$(timeout 30 "${HOUSE_PY[@]}" "$READ_MAILBOX" "$CHARACTER_ID" --unread --count 2>>"$LOG_FILE" | tail -n 1)
+  if [[ "$UNREAD_COUNT" =~ ^[0-9]+$ ]] && [ "$UNREAD_COUNT" -gt 0 ]; then
+    MAILBOX_NOTICE="## 手紙
+まだ読んでいない手紙が ${UNREAD_COUNT} 通ある。house の mail_read(unread_only を true)で読んで、返事を書くなら mail_send。"
+  elif ! [[ "$UNREAD_COUNT" =~ ^[0-9]+$ ]]; then
+    echo "未読の手紙の件数を読めなかった(知らせは出さない)" >> "$LOG_FILE"
   fi
 fi
 
@@ -341,14 +342,14 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
 #   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
-#   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない)
+#   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
+#     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
 # relations-mcp はまだコンポーネントが無いため allowedTools に含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
 Edit,
 Glob($CHARACTER_DIR/**),
-Bash(python3 $SCRIPTS_DIR/*.py:*),
 mcp__m5-mcp__print_text,
 mcp__m5-mcp__print_image_text,
 mcp__m5-mcp__take_snapshot,
