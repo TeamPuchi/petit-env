@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude CLI に渡す MCP 設定（記憶 MCP・SNS-MCP・欲求 MCP）を CHARACTER_IDS のぷちごとに作る（K14）。
+# claude CLI に渡す MCP 設定（記憶 MCP・SNS-MCP・欲求 MCP・家の道具 MCP）を CHARACTER_IDS のぷちごとに作る（K14）。
 #
 #   gen-mcp-config.sh            → $PETIT_MCP_DIR/<id>.json を CHARACTER_IDS 全員ぶん書く
 #   gen-mcp-config.sh <id>       → そのぷちの分だけ書く
@@ -23,6 +23,11 @@
 #   ここで渡すのは CHARACTER_ID・記憶の置き場（記憶 MCP と同じ値）・boto3 のリージョンだけ。
 #   鍵の表・KMS・SNS の URL と秘密はコンテナの env をそのまま読む（petit-desire petit_desire/service.py の表）。
 #   run-for-each-character.sh の desire（5 分ごとの更新）もこの env を使う（置き場の決め方を1か所に）。
+#
+# 家の道具（house。家 API＝m5-petit-app の house_mcp.py があるときだけ載せる・2026-09-27）:
+#   ぷちが自分のノート（NOTE#）と手紙（MAIL#）を読み書きする道具（note_* / mail_*）。
+#   ここで渡すのは PETIT_ID・PETIT_DATA_DIR だけ。家の表・鍵の表・KMS・リージョンは
+#   コンテナの env（家 API と同じ PETIT_HOUSE_TABLE など）をそのまま読む。
 set -euo pipefail
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
@@ -84,12 +89,22 @@ gen_one() {
               + (if $region != "" then {AWS_DEFAULT_REGION: $region} else {} end))')"
   fi
 
+  # 家の道具 MCP（家 API に house_mcp.py がある版のときだけ）
+  local house="null"
+  if [[ -f "$REPOS_DIR/m5-petit-app/house_mcp.py" ]]; then
+    house="$(server_cmd "$REPOS_DIR/m5-petit-app" petit-house-mcp | jq \
+      --arg id "$id" --arg data "$PETIT_DATA_DIR" '
+      .env = {PETIT_ID: $id, PETIT_DATA_DIR: $data}')"
+  fi
+
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
-  jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" \
-    '{mcpServers: ({memory: $m, "petit-sns": $s} + (if $d != null then {"desire-system": $d} else {} end))}' \
+  jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" \
+    '{mcpServers: ({memory: $m, "petit-sns": $s}
+                   + (if $d != null then {"desire-system": $d} else {} end)
+                   + (if $h != null then {house: $h} else {} end))}' \
     > "$OUT_DIR/$id.json.tmp"
   mv "$OUT_DIR/$id.json.tmp" "$OUT_DIR/$id.json"
-  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off))"
+  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off) house=$([[ "$house" != null ]] && echo on || echo off))"
 }
 
 if [[ -n "${1:-}" ]]; then
