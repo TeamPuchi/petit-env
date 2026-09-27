@@ -298,7 +298,7 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
     if [ "$ROUTINE_RAND" -lt 20 ]; then
       DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
     else
-      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・自分の声でボイスメモを残す・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
 - 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
     fi
@@ -342,8 +342,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
 #   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
-#   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
-#     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
+#   / 家 API の house(ノート・手紙・ボイスメモ。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
+#     ボイスメモ voice_memo_leave を自律行動で使うのはなぎさん 2026-09-27 の了承)
 # relations-mcp はまだコンポーネントが無いため allowedTools に含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
@@ -384,7 +384,8 @@ mcp__house__note_list,
 mcp__house__note_read,
 mcp__house__note_write,
 mcp__house__mail_read,
-mcp__house__mail_send
+mcp__house__mail_send,
+mcp__house__voice_memo_leave
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')

@@ -45,7 +45,7 @@ check "memory・petit-sns はそのまま" $?
 rm -rf "$PETIT_DATA_DIR/logs"
 PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run > /dev/null 2>&1
 log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
-for t in note_list note_read note_write mail_read mail_send; do
+for t in note_list note_read note_write mail_read mail_send voice_memo_leave; do
   grep -qx "mcp__house__$t" <<<"$log"
   check "allowedTools に mcp__house__$t" $?
 done
