@@ -297,7 +297,7 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
     if [ "$ROUTINE_RAND" -lt 20 ]; then
       DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
     else
-      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
 - 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
     fi
@@ -341,8 +341,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
 #   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
-# notes-mcp / relations-mcp はまだコンポーネントが無いため allowedTools に
-# 含めていない(用意できたら追加する)。
+#   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない)
+# relations-mcp はまだコンポーネントが無いため allowedTools に含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -378,7 +378,12 @@ mcp__petit-sns__sns_post,
 mcp__petit-sns__sns_timeline,
 mcp__petit-sns__sns_react,
 mcp__petit-sns__sns_comment,
-mcp__petit-sns__sns_inbox
+mcp__petit-sns__sns_inbox,
+mcp__house__note_list,
+mcp__house__note_read,
+mcp__house__note_write,
+mcp__house__mail_read,
+mcp__house__mail_send
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
@@ -391,9 +396,10 @@ fi
 
 # MCP 設定は2枚重ねる(K14):
 #   1. 生成分 /opt/petit/run/mcp/<id>.json … 記憶 MCP・SNS-MCP・欲求 MCP(desire-system。petit-desire があるとき)
+#      ・家の道具 MCP(house。家 API に house_mcp.py があるとき)
 #      (entrypoint が起動時に gen-mcp-config.sh で作る)
 #   2. キャラ固有 $CHARACTER_DIR/config/autonomous-mcp.json … m5-mcp など(あれば)
-# 名前(memory・petit-sns・desire-system)が重なる定義はキャラ固有側に書かない。
+# 名前(memory・petit-sns・desire-system・house)が重なる定義はキャラ固有側に書かない。
 MCP_CONFIGS=()
 GEN_MCP_CONFIG="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
 [ -f "$GEN_MCP_CONFIG" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >> "$LOG_FILE" 2>&1 || true
