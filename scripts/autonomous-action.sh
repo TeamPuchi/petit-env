@@ -298,7 +298,7 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
     if [ "$ROUTINE_RAND" -lt 20 ]; then
       DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
     else
-      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・日記や TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
 - 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
     fi
@@ -324,6 +324,7 @@ ${DESIRE_SECTION}
 ## 補足ルール
 - ${TIME_RULE}
 - 人がいないことはよくある
+- 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
 }${PERMISSION_RULES:+
