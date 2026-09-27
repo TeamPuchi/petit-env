@@ -105,13 +105,15 @@ docker compose exec core claude login
 | 1 | claude CLI + 自律行動 | supercronicが20分ごとに実行 |
 | 2 | MCPサーバー群(memory / petit-sns / desire-system は自動生成、m5-mcp はキャラ固有設定) | claude CLIが都度spawn |
 | 3 | 家 API(m5-petit-app, FastAPI :8765。petit-infra の Caddy が `/house/*` をここへ) | コンテナ内で常駐(落ちたら起こし直す) |
-| 4 | 欲求システム更新(5分ごと・petit-desire の `desire-updater`)・記憶整理 | supercronicに集約 |
+| 4 | 欲求システム更新(5分ごと・petit-desire の `desire-updater`)・日記(毎晩4:00)・記憶整理 | supercronicに集約 |
 | 5 | 体験デーモン見張り | Phase 1時点ではプレースホルダー(下記「既知の制約」参照) |
 | 6 | claude CLI の会話記録の消去(K21) | supercronicが毎日、`~/.claude/projects` 等の24時間より古いものを消す(`scripts/purge-claude-transcripts.sh`) |
 
 > **claude CLI の会話記録は残さない**(K21・2026-09-24)。記憶は記憶 MCP(petit-memory。忘れる＝鍵ごと消す)が持つので、`~/.claude`(ボリューム `petit-claude-auth-<pid>`)の `projects/*.jsonl`・`history.jsonl` などは毎日24時間より古いものを消す。認証(`.credentials.json`)と設定は消さない。
 
 > **はじめての日のチュートリアルが済むまで自律行動しない**(2026-09-27)。`autonomous-action.sh` は回ごとに家 API の `scripts/tutorial_state.py <id> gate` で家の表の `STATE#TUTORIAL` を見て、未完了なら何もせず抜ける(ログに1行)。状態を読めないときも今回は抜ける。欲求の5分ごとの更新は止めない。里親がまいぷち。の会話画面でお題を全部済ませると達成になり、次の回(最長20分後)から動きはじめる。運営が手で達成済みにするなら `tutorial_state.py <id> complete`、関所ごと外すなら `PETIT_TUTORIAL_GATE=0`。`PETIT_HOUSE_TABLE` が無い環境では関所は働かない。確かめ方: `bash scripts/tests/tutorial-gate.test.sh`。
+
+> **ぷちは毎晩 4:00 に寝て、きのうの日記を書く**(akatsuki-petit#133・2026-09-27)。`run-for-each-character.sh diary` が家 API の `scripts/write_diary.py <id>` を呼び、ぷちがきのう(JST)の会話(`MSG#`)とその日の記憶(里親に見えるものだけ)を見返して、自分の口調で日記を書く(家の表の `DIARY#<date>`。まいぷち。の日記で読める)。書いたら会話のセッション(`/data/characters/<id>/state/.session-id.*`)を切り、次の会話ではいちばん最近の日記がシステムプロンプトに添えられる。会話も記憶も無い日は書かない。もう書いてある日は書き直さない(手で書き直すなら `write_diary.py <id> --date <YYYY-MM-DD> --overwrite`)。ログは `/data/logs/diary-cron.log` に1キャラ1行(本文は出さない)。`PETIT_HOUSE_TABLE` が無い環境では何もしない。確かめ方: `bash scripts/tests/diary-job.test.sh`。
 
 > 記憶 MCP(`memory`)と SNS-MCP(`petit-sns`)の設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` のぷちごとに `/opt/petit/run/mcp/<id>.json` へ作る(秘密は書かない。`PETIT_SNS_INTERNAL_SECRET`・`ANTHROPIC_API_KEY`・AWS の認証情報はコンテナの env から claude 経由で MCP に引き継がれる)。`PETIT_HOUSE_TABLE` があれば記憶は DynamoDB(pk `P#<pid>`)、無ければ `/data/characters/<id>/memory.db`。
 > 欲求 MCP(`desire-system`・petit-desire)も同じく自動生成する(2026-09-26)。`PETIT_HOUSE_TABLE` があれば家の表の `STATE#DESIRES`(家 API の `GET /petits/{pid}/mood` が読む行)、無ければ `/data/characters/<id>/data/desires.json`。5分ごとの更新(`run-for-each-character.sh desire`)と、自律行動のプロンプトに差し込む「いまの気分」(`desire-status`)も同じ env を使う。欲求の定義はキャラの `config/desire_config.json`、無ければ petit-desire の既定(仮置き)。

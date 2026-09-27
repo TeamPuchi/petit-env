@@ -15,6 +15,10 @@
 # 欲求システム更新(desire updater): 5分ごと
 */5 * * * * /opt/petit/scripts/run-for-each-character.sh desire >> /data/logs/desire-cron.log 2>&1
 
+# 寝る(日記): 毎晩4:00(コンテナの TZ。既定 Asia/Tokyo)。きのうの会話と記憶を見返して日記を書き、会話のセッションを切る(akatsuki-petit#133)
+# 記憶の整理(memory-sleep)の前に置く。日付は家 API の write_diary.py が JST で決める
+0 4 * * * /opt/petit/scripts/run-for-each-character.sh diary >> /data/logs/diary-cron.log 2>&1
+
 # 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
 5 4 * * * /opt/petit/scripts/run-for-each-character.sh memory-sleep >> /data/logs/memory-sleep-cron.log 2>&1
 
