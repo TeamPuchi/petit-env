@@ -273,6 +273,21 @@ if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$READ_MAILBOX" ]; then
   fi
 fi
 
+# --- 体の知らせ(akatsuki-petit#99・#117) ---
+# 呼ばれていない間に体(機体)に起きたこと(触られた・持ち上がった・明るさが変わった など)を、
+# 家 API の scripts/body_news.py <id> で前回知らせたところから短く出す(house 表の BODY#。変わったところだけ)。
+# くわしくはぷちが house の body_since で読む。dry-run では位置を進めない(--peek)。
+# 家の表が無い・古い家 API(body_news.py が無い)・読めないときは知らせを出さないだけで続ける。
+BODY_NOTICE=""
+BODY_NEWS="$HOUSE_API_DIR/scripts/body_news.py"
+if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$BODY_NEWS" ]; then
+  BODY_ARGS=("$CHARACTER_ID")
+  [ "$DRY_RUN" = true ] && BODY_ARGS+=(--peek)
+  BODY_NOTICE=$(timeout 30 "${HOUSE_PY[@]}" "$BODY_NEWS" "${BODY_ARGS[@]}" 2>>"$LOG_FILE")
+  # ログには件数(行数)だけ。中身(いつ触られたか等)は残さない
+  [ -n "$BODY_NOTICE" ] && echo "[body] 知らせ $(echo "$BODY_NOTICE" | grep -c '^- ') 行" >> "$LOG_FILE"
+fi
+
 # --- いまの気分(欲求) ---
 # petit-desire(欲求エンジン)があれば、今の欲求をプロンプトに差し込む(get_desires と同じ中身)。
 # 置き場(家の表 STATE#DESIRES / desires.json)は欲求 MCP と同じ env で決める(gen-mcp-config.sh)。
@@ -327,6 +342,9 @@ ${DESIRE_SECTION}
 - 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
+}${BODY_NOTICE:+
+${BODY_NOTICE}
+- 体の知らせに気になることがあれば、house の body_since・body_now で確かめてよい。顔(body_face)や声(body_speak)で応えてもよい(人がいないことも多い)
 }${PERMISSION_RULES:+
 ## 現在の制限
 ${PERMISSION_RULES}}
@@ -345,6 +363,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
 #   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
+#   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
+#   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 # relations-mcp はまだコンポーネントが無いため allowedTools に含めていない(用意できたら追加する)。
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
@@ -376,6 +396,8 @@ mcp__memory__search_episodes,
 mcp__desire-system__get_desires,
 mcp__desire-system__satisfy_desire,
 mcp__desire-system__boost_desire,
+mcp__desire-system__shape_desire,
+mcp__desire-system__retire_desire,
 mcp__petit-sns__sns_post,
 mcp__petit-sns__sns_timeline,
 mcp__petit-sns__sns_react,
@@ -385,7 +407,13 @@ mcp__house__note_list,
 mcp__house__note_read,
 mcp__house__note_write,
 mcp__house__mail_read,
-mcp__house__mail_send
+mcp__house__mail_send,
+mcp__house__body_now,
+mcp__house__body_since,
+mcp__house__body_face,
+mcp__house__body_speak,
+mcp__house__body_glance,
+mcp__house__body_gaze
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
