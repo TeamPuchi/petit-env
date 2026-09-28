@@ -446,6 +446,11 @@ else
     CLAUDE_ARGS+=(--mcp-config "${MCP_CONFIGS[@]}" --strict-mcp-config)
   fi
   CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" --allowedTools "$ALLOWED_TOOLS")
+  # 思考の要約を stream に残す（akatsuki-petit#154）。既定（omitted）だと thinking の中身が空になる。
+  # 空にすると付けない。フラグを知らない古い claude なら、付けずにやり直す（claude_run）
+  THINKING_DISPLAY="${PETIT_CLAUDE_THINKING_DISPLAY-summarized}"
+  THINK_ARGS=()
+  [ -n "$THINKING_DISPLAY" ] && THINK_ARGS=(--thinking-display "$THINKING_DISPLAY")
 
   # K28: stream-json には会話の本文・ツールの引数（remember の本文など）がそのまま入る。
   # /data/logs（ボリューム＝バックアップ・スナップショットの対象になりうる）には置かず、
@@ -486,9 +491,19 @@ else
     archive_stream "$@"
   }
 
+  claude_run() {  # claude_run [--resume <id>] — プロンプトを渡して stream を $STREAM_FILE に受ける
+    echo "$PROMPT" | claude "$@" "${CLAUDE_ARGS[@]}" ${THINK_ARGS[@]+"${THINK_ARGS[@]}"} > "$STREAM_FILE" 2>&1
+    if [ "${#THINK_ARGS[@]}" -gt 0 ] && grep -q -- "--thinking-display" "$STREAM_FILE" \
+       && ! grep -q '"type":"result"' "$STREAM_FILE"; then
+      echo "[thinking-display] この claude には無い。付けずにやり直す" >> "$LOG_FILE"
+      THINK_ARGS=()
+      echo "$PROMPT" | claude "$@" "${CLAUDE_ARGS[@]}" > "$STREAM_FILE" 2>&1
+    fi
+  }
+
   run_new_session() {  # run_new_session <attempt>
     echo "[新規セッション作成]" >> "$LOG_FILE"
-    echo "$PROMPT" | claude "${CLAUDE_ARGS[@]}" > "$STREAM_FILE" 2>&1
+    claude_run
     finalize_session "new"
     keep_run "${1:-1}"
   }
@@ -516,7 +531,7 @@ else
   if [ -f "$SESSION_FILE" ]; then
     SESSION_ID=$(cat "$SESSION_FILE")
     echo "[resume] session_id=$SESSION_ID" >> "$LOG_FILE"
-    echo "$PROMPT" | claude --resume "$SESSION_ID" "${CLAUDE_ARGS[@]}" > "$STREAM_FILE" 2>&1
+    claude_run --resume "$SESSION_ID"
     if grep -qi "No conversation found\|error_session_not_found" "$STREAM_FILE" 2>/dev/null; then
       echo "[resume失敗]" >> "$LOG_FILE"
       keep_run 1 --resumed --fail-reason resume_failed
