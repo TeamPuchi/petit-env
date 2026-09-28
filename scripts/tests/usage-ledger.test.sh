@@ -35,6 +35,11 @@ chmod +x "$APP/.venv/bin/python"
 cat > "$WORK/bin/claude" <<'SH'
 #!/usr/bin/env bash
 cat > /dev/null
+echo "$*" >> "$FAKE_CLAUDE_ARGS"
+if [[ " $* " == *" --thinking-display "* ]] && [ -n "${FAKE_OLD_CLI:-}" ]; then
+  echo "error: unknown option '--thinking-display'"
+  exit 1
+fi
 if [[ " $* " == *" --resume "* ]] && [ -n "${FAKE_RESUME_FAIL:-}" ]; then
   echo "No conversation found with session ID: old"
   exit 1
@@ -43,14 +48,14 @@ echo '{"type":"system","subtype":"init","model":"claude-sonnet-5"}'
 echo '{"type":"result","subtype":"success","session_id":"s-new","num_turns":2,"total_cost_usd":0.03}'
 SH
 chmod +x "$WORK/bin/claude"
-export FAKE_CALLS="$WORK/calls" FAKE_STREAMS="$WORK/streams" FAKE_PROMPTS="$WORK/prompts"
+export FAKE_CALLS="$WORK/calls" FAKE_STREAMS="$WORK/streams" FAKE_PROMPTS="$WORK/prompts" FAKE_CLAUDE_ARGS="$WORK/claude-args"
 
 fails=0
 check() {  # 名前 条件(0=ok)
   if [ "$2" -eq 0 ]; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi
 }
 run() {
-  : > "$FAKE_CALLS"; : > "$FAKE_STREAMS"; : > "$FAKE_PROMPTS"
+  : > "$FAKE_CALLS"; : > "$FAKE_STREAMS"; : > "$FAKE_PROMPTS"; : > "$FAKE_CLAUDE_ARGS"
   env PETIT_HOUSE_TABLE= PATH="$WORK/bin:$PATH" "$@" bash "$SCRIPT" mio -p "おさんぽしよう" > /dev/null 2>&1
 }
 
@@ -65,6 +70,17 @@ grep -q "m5-petit-app/scripts/record_usage.py --petit mio --source autonomous --
 grep -q -- "--input-chars 7 --attempt 1 --data-dir $PETIT_DATA_DIR" "$FAKE_CALLS"; check "プロンプトの文字数・台帳の置き場" $?
 grep -q '"total_cost_usd":0.03' "$FAKE_STREAMS"; check "stream を消す前に渡す" $?
 ! grep -q -- "--resumed" "$FAKE_CALLS"; check "新しいセッションは resumed でない" $?
+grep -q -- "--thinking-display summarized" "$FAKE_CLAUDE_ARGS"; check "思考の要約を頼む（#154）" $?
+
+rm -f "$PETIT_DATA_DIR/characters/mio/state/.heartbeat-session-id"
+run FAKE_OLD_CLI=1
+[ "$(wc -l < "$FAKE_CLAUDE_ARGS")" -eq 2 ] && ! tail -n1 "$FAKE_CLAUDE_ARGS" | grep -q -- "--thinking-display"
+check "--thinking-display を知らない claude には付けずにやり直す" $?
+grep -q '"total_cost_usd":0.03' "$FAKE_STREAMS"; check "やり直した回の stream を渡す" $?
+
+rm -f "$PETIT_DATA_DIR/characters/mio/state/.heartbeat-session-id"
+run PETIT_CLAUDE_THINKING_DISPLAY=
+! grep -q -- "--thinking-display" "$FAKE_CLAUDE_ARGS"; check "PETIT_CLAUDE_THINKING_DISPLAY を空にすると付けない" $?
 
 echo old > "$PETIT_DATA_DIR/characters/mio/state/.heartbeat-session-id"
 date "+%Y-%m-%d" > "$PETIT_DATA_DIR/characters/mio/state/.heartbeat-session-date"
