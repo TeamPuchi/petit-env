@@ -451,12 +451,46 @@ else
   # /data/logs（ボリューム＝バックアップ・スナップショットの対象になりうる）には置かず、
   # 一時ファイルに受けて、要る数値（session_id・回数・費用・成否）だけを取り出したら消す。
   STREAM_FILE="$(mktemp "${TMPDIR:-/tmp}/petit-stream.XXXXXX")"
-  trap 'rm -f "$STREAM_FILE"' EXIT
+  PROMPT_FILE="$(mktemp "${TMPDIR:-/tmp}/petit-prompt.XXXXXX")"
+  trap 'rm -f "$STREAM_FILE" "$PROMPT_FILE"' EXIT
+  printf '%s' "$PROMPT" > "$PROMPT_FILE"
 
-  run_new_session() {
+  # コスト台帳（家 API の usage/YYYY-MM.jsonl。チャットと同じ台帳）に 1 回 1 行足す。
+  # 家 API の scripts/record_usage.py が stream から額・トークン・道具の名前・長さだけを抜く（本文は入れない）。
+  # 台帳に書けなくても自律行動は止めない。record_usage.py の無い古い家 API では何もしない。
+  RECORD_USAGE="$HOUSE_API_DIR/scripts/record_usage.py"
+  record_usage() {  # record_usage <attempt> [--resumed] [--fail-reason X]
+    [ -f "$RECORD_USAGE" ] || return 0
+    local attempt="$1"; shift
+    local chars
+    chars="$(LC_ALL=C.UTF-8 bash -c 'echo "${#1}"' _ "$PROMPT")"  # 文字数（LANG の無いコンテナでもバイト数にしない）
+    timeout 30 "${HOUSE_PY[@]}" "$RECORD_USAGE" --petit "$CHARACTER_ID" --source autonomous \
+      --file "$STREAM_FILE" --input-chars "$chars" --attempt "$attempt" --data-dir "$PETIT_DATA_DIR" "$@" \
+      >> "$LOG_FILE" 2>&1 || echo "[usage-ledger] 書けなかった" >> "$LOG_FILE"
+  }
+
+  # 全文ログ（家 API の scripts/archive_stream.py・petit-api#38）。stream とプロンプトを、運営だけが読める
+  # 置き場（PETIT_AUDIT_BUCKET。無ければ archive_stream.py が何もしない）に置く。/data には残さない（K28 のまま）。
+  # 置けなくても自律行動は止めない。archive_stream.py の無い古い家 API では何もしない。
+  ARCHIVE_STREAM="$HOUSE_API_DIR/scripts/archive_stream.py"
+  archive_stream() {  # archive_stream <attempt> [--resumed] [--fail-reason X]
+    [ -f "$ARCHIVE_STREAM" ] || return 0
+    local attempt="$1"; shift
+    timeout 60 "${HOUSE_PY[@]}" "$ARCHIVE_STREAM" --petit "$CHARACTER_ID" --source autonomous \
+      --file "$STREAM_FILE" --prompt-file "$PROMPT_FILE" --attempt "$attempt" "$@" \
+      >> "$LOG_FILE" 2>&1 || echo "[audit-log] 置けなかった" >> "$LOG_FILE"
+  }
+
+  keep_run() {  # keep_run <attempt> [--resumed] [--fail-reason X] — 台帳と全文ログの両方へ
+    record_usage "$@"
+    archive_stream "$@"
+  }
+
+  run_new_session() {  # run_new_session <attempt>
     echo "[新規セッション作成]" >> "$LOG_FILE"
     echo "$PROMPT" | claude "${CLAUDE_ARGS[@]}" > "$STREAM_FILE" 2>&1
     finalize_session "new"
+    keep_run "${1:-1}"
   }
 
   finalize_session() {
@@ -485,13 +519,15 @@ else
     echo "$PROMPT" | claude --resume "$SESSION_ID" "${CLAUDE_ARGS[@]}" > "$STREAM_FILE" 2>&1
     if grep -qi "No conversation found\|error_session_not_found" "$STREAM_FILE" 2>/dev/null; then
       echo "[resume失敗]" >> "$LOG_FILE"
+      keep_run 1 --resumed --fail-reason resume_failed
       rm -f "$SESSION_FILE"
-      run_new_session
+      run_new_session 2
     else
       finalize_session "resume"
+      keep_run 1 --resumed
     fi
   else
-    run_new_session
+    run_new_session 1
   fi
 fi
 
