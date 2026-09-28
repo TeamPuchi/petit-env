@@ -151,6 +151,35 @@ elif [ "$DRY_RUN" = true ] && [ -z "$OVERRIDE_DATE" ]; then
   SKIP_SCHEDULE=true
 fi
 
+# --- 設定の関所(akatsuki-petit#159) ---
+# まいぷち。の設定(house 表の STATE#SETTINGS: 自律行動の ON/OFF・時間帯・頻度・カメラ/スピーカー)で決める。
+# 判定は家 API の scripts/settings_state.py <id> gate(まだまいぷち。で決めていない項目は settings.json を読む):
+#   0 = 動く → 下の settings.json の判定を飛ばす / 3 = 今回は動かない / それ以外 = 読めない → 今までどおり settings.json で決める
+# 関所は読んだ印を表に残す(まいぷち。の「ぷちに届いたか」の表示に使う)。PETIT_SETTINGS_GATE=0 で止められる。
+SETTINGS_GATE="$HOUSE_API_DIR/scripts/settings_state.py"
+SETTINGS_OUT=""
+if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_SETTINGS_GATE:-1}" != "0" ] \
+   && [ -f "$SETTINGS_GATE" ]; then
+  SETTINGS_ARGS=(--now "$CURRENT_DATE" --file "$SETTINGS_FILE")
+  [ "$DRY_RUN" = true ] && SETTINGS_ARGS+=(--dry-run)
+  SETTINGS_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$SETTINGS_GATE" "$CHARACTER_ID" gate "${SETTINGS_ARGS[@]}" 2>>"$LOG_FILE")
+  SETTINGS_CODE=$?
+  case "$SETTINGS_CODE" in
+    0)
+      echo "設定の関所: $SETTINGS_OUT" >> "$LOG_FILE"
+      SKIP_SCHEDULE=true
+      ;;
+    3)
+      echo "設定の関所: $SETTINGS_OUT" >> "$LOG_FILE"
+      exit 0
+      ;;
+    *)
+      echo "設定を読めないので settings.json で決める (exit=$SETTINGS_CODE $SETTINGS_OUT)" >> "$LOG_FILE"
+      SETTINGS_OUT=""
+      ;;
+  esac
+fi
+
 if [ "$SKIP_SCHEDULE" = false ]; then
   IS_ACTIVE=false
   if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
@@ -243,6 +272,9 @@ if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
   [ "$ALLOW_SOUND" = "false" ]  && PERMISSION_RULES="${PERMISSION_RULES}- 音(play_sound, play_icon)は今は出さないこと。\n"
   [ "$ALLOW_MIC" = "false" ]    && PERMISSION_RULES="${PERMISSION_RULES}- マイク(mic_start)は今は使わないこと。\n"
 fi
+# まいぷち。の設定(設定の関所の出力)で切られていれば、それも足す(akatsuki-petit#103・#159)
+case "$SETTINGS_OUT" in *camera=off*) PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。写真を撮る・周りを見る道具は使わないこと。\n" ;; esac
+case "$SETTINGS_OUT" in *speaker=off*) PERMISSION_RULES="${PERMISSION_RULES}- お喋り(スピーカー)は里親が止めている。声や音を出す道具は使わないこと。\n" ;; esac
 
 # --- プロンプト組み立て ---
 if [ -f "$CHARACTER_DIR/TODO_ACTIVE.md" ]; then
