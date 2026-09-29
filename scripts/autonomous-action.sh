@@ -407,7 +407,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
 #   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
-#     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29)
+#     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29。写真にひとこと残す album_say は W9)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
 #   / house のノートのタグ・自分のノートを消す(note_tag・note_delete。上限 100 件に届いたら自分で空ける。petit-api#41)
@@ -459,7 +459,8 @@ mcp__house__body_glance,
 mcp__house__body_gaze,
 mcp__house__album_list,
 mcp__house__album_look,
-mcp__house__album_mark_seen
+mcp__house__album_mark_seen,
+mcp__house__album_say
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
