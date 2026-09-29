@@ -105,6 +105,10 @@ COPY --chown=petit:petit scripts/autonomous-action.sh /opt/petit/scripts/autonom
 COPY --chown=petit:petit scripts/run-for-each-character.sh /opt/petit/scripts/run-for-each-character.sh
 COPY --chown=petit:petit scripts/gen-mcp-config.sh /opt/petit/scripts/gen-mcp-config.sh
 COPY --chown=petit:petit scripts/purge-claude-transcripts.sh /opt/petit/scripts/purge-claude-transcripts.sh
+COPY --chown=petit:petit scripts/gen-skills.sh /opt/petit/scripts/gen-skills.sh
+# ぷちの共通スキル（Claude Code の Skills。読書の reading など・W11）。gen-skills.sh がぷちごとの置き場
+# /opt/petit/run/skills/<id>/.claude/skills/ にまとめ、claude に --add-dir で渡す
+COPY --chown=petit:petit skills/ /opt/petit/skills/
 
 RUN chmod +x /opt/petit/entrypoint.sh /opt/petit/scripts/*.sh
 

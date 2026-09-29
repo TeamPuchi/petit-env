@@ -32,6 +32,7 @@ config/
 SOUL.md                  # 人格の核(必ず書く)
 ROUTINES.md              # ルーチン行動の一覧(任意)
 TODO_ACTIVE.md           # 今やること(任意)
+skills/                  # このぷちだけのスキル(任意。共通のスキルの置き換えも。skills/README.md)
 ```
 
 自律行動が始まると、`state/` や `logs/` などのディレクトリが自動的に作られます。
