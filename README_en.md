@@ -8,15 +8,11 @@ A Docker-based umbrella runtime environment for running your own M5 Petit. It wi
 and [petit-scripts](https://github.com/TeamPuchi/petit-scripts) together in a single container, along with
 a cron-equivalent scheduler for autonomous behavior, the dashboard, and memory consolidation.
 
-> **Phase 1 (2026-07): authored, build-untested**
-> This repository was written on a development machine without Docker installed.
-> `docker build` / `docker compose up` have never actually been run. What has been
-> verified so far:
-> - YAML syntax (`python -c "import yaml; yaml.safe_load(...)"`)
-> - Shell script syntax (`bash -n`)
-> - Static sanity of the Dockerfile (manual review, version pinning consistency)
->
-> Building and running on a machine with Docker installed is the remaining Phase 1 task.
+> **Status (2026-09-29)**: this is the source of the cloud `petit-core` container, running on an
+> EC2 (t4g, arm64) host from the [petit-infra](https://github.com/TeamPuchi/petit-infra) compose.
+> Builds were verified on amd64 and arm64 on 2026-09-23 (remaining items: `docs/cloud/TODO.md`).
+> The house API served on `:8765` lives in TeamPuchi/petit-api (renamed from m5-petit-app; the
+> in-container path is still `m5-petit-app`). The Japanese README is the up-to-date one.
 
 ## Layout
 
@@ -30,9 +26,8 @@ scripts/
   sync-repos.sh / .ps1        # clone/pull component repos into repos/
   start.sh / .ps1             # runs sync-repos then docker compose up
   petit.sh                    # update / logs / status / stop
-  entrypoint.sh                # container entrypoint (supercronic + dashboard + experience watchdog)
+  entrypoint.sh                # container entrypoint (supercronic + house API)
   autonomous-action.sh         # autonomous behavior script (generic, in-container version)
-  experience-watchdog.sh       # experience daemon watchdog (Phase 1 placeholder)
   run-for-each-character.sh    # dispatches jobs across CHARACTER_IDS
 release/
   start-windows.bat / start-macos.command   # double-click launchers (planned for Phase 4)
@@ -116,13 +111,12 @@ point `.env` at their URLs.
 
 ## Known limitations (Phase 1)
 
-- **Build-untested**, as noted above.
-- **notes-mcp / relations-mcp are not included yet.** There is no repository for either MCP
-  server yet, so they're not in `autonomous-action.sh`'s allowedTools (planned to be added
-  once available).
-- **No published component exists yet for an experience-daemon equivalent.**
-  `scripts/experience-watchdog.sh` is a forward-compatible placeholder: it does nothing and
-  exits cleanly if the target directory isn't found.
+- **The local notes-mcp / relations-mcp moved into the house API's `house` MCP server**
+  (`note_*` and `relation_*`), and both are in `autonomous-action.sh`'s allowedTools. There is
+  no tool yet to carry a local `relations.json` over to the cloud.
+- **The local experience daemon is not shipped.** In the cloud, device events reach the house
+  API through IoT Core and are kept as the body record (`body_since`, akatsuki-petit#117), so the
+  watchdog script and its cron job were removed.
 - `docker-compose.release.yml` / `release/*` are templates. The `ghcr.io/teampuchi/petit-core`
   image doesn't exist yet (images are built locally on the house host).
 - **Baking components (K14, 2026-09-24)**: `components.lock` pins m5-petit-app / petit-memory /
