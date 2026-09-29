@@ -198,6 +198,10 @@ docker compose -f docker-compose.release.yml build
 
 - `docker build` が通り、`docker run --entrypoint supercronic petit-core:amd64 -version` → `v0.2.47`
 - `docker run --entrypoint claude petit-core:amd64 --version` → `2.1.267 (Claude Code)`
+  （2026-09-29 に `CLAUDE_CODE_VERSION` を stable の `2.1.277` に上げた。`docker build` は未確認。Linux 版の本体で、会話・自律行動が使う旗
+  `--print --system-prompt --output-format stream-json --verbose --input-format --thinking-display --max-turns --model --mcp-config
+  --strict-mcp-config --allowedTools --add-dir --resume` を受け付けること、`--resume` の失敗の文言「No conversation found」と
+  `result` 行の `session_id`・`total_cost_usd`・`num_turns`・`subtype`・`is_error` が前と同じことを確かめた。`--help` の中身は 2.1.267 と同じ）
 - `docker compose up -d` → `entrypoint.sh` が起動し、supercronicがcrontabを読み込んでジョブを実際に発火(1分間隔のテストcrontabで実行成功を確認)
 - 5コンポーネントの `.venv` は匿名ボリュームにより `petit:petit` 所有になり、`uv run` が通る。ホスト側の `repos/<name>/.venv` は空のまま(T3の設計どおり)
 
