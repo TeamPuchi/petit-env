@@ -410,7 +410,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29。写真にひとこと残す album_say は W9)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
-#   / house のノートのタグ・自分のノートを消す(note_tag・note_delete。上限 100 件に届いたら自分で空ける。petit-api#41)
+#   / house のノートのタグ・鍵・自分のノートを消す(note_tag・note_lock・note_delete。上限 100 件を超えると鍵の無い古いものから消えるので、残したいものに鍵を掛ける。petit-api#41・W10 petit-api#59)
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -438,6 +438,7 @@ mcp__house__note_list,
 mcp__house__note_read,
 mcp__house__note_write,
 mcp__house__note_tag,
+mcp__house__note_lock,
 mcp__house__note_delete,
 mcp__house__relation_list,
 mcp__house__relation_update,
