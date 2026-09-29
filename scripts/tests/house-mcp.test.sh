@@ -50,5 +50,37 @@ for t in note_list note_read note_write note_tag note_delete mail_read mail_send
   check "allowedTools に mcp__house__$t" $?
 done
 
+# 4. 体・アルバム・視覚の記憶の道具（2026-09-29・#171 H6）。クラウドに無い m5-mcp は許可しない
+for t in mcp__house__body_wait_touch mcp__house__body_glance mcp__house__body_speak \
+         mcp__house__album_list mcp__house__album_look mcp__house__album_mark_seen mcp__memory__save_visual_memory; do
+  grep -qx "$t" <<<"$log"
+  check "allowedTools に $t" $?
+done
+! grep -q "^mcp__m5-mcp__" <<<"$log"
+check "キャラ固有の設定に m5-mcp が無ければ m5-mcp の道具は許可しない" $?
+grep -q "声(body_speak)は、声で伝えたいと思った言葉があるときだけ" <<<"$log"
+check "声はぷちが選んだ言葉だけ、とプロンプトに書く" $?
+
+# 5. ローカル版（キャラ固有の設定に m5-mcp がある）では m5-mcp の道具も許可する
+echo '{"mcpServers": {"m5-mcp": {"command": "true"}}}' > "$PETIT_DATA_DIR/characters/mio/config/autonomous-mcp.json"
+rm -rf "$PETIT_DATA_DIR/logs"
+PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run > /dev/null 2>&1
+log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
+grep -qx "mcp__m5-mcp__show_face" <<<"$log" && grep -qx "mcp__m5-mcp__take_snapshot" <<<"$log"
+check "m5-mcp があるキャラには m5-mcp の道具も許可する" $?
+rm -f "$PETIT_DATA_DIR/characters/mio/config/autonomous-mcp.json"
+
+# 6. カメラ・スピーカーを止めていれば、目・声の道具は許可しない
+echo '{"allow_camera": false, "allow_sound": false}' > "$PETIT_DATA_DIR/characters/mio/config/settings.json"
+rm -rf "$PETIT_DATA_DIR/logs"
+PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run --force-normal > /dev/null 2>&1
+log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
+! grep -qx "mcp__house__body_glance" <<<"$log" && ! grep -qx "mcp__house__body_gaze" <<<"$log" \
+  && ! grep -qx "mcp__house__body_speak" <<<"$log"
+check "カメラ・スピーカーが止まっていれば body_glance・body_gaze・body_speak を許可しない" $?
+grep -qx "mcp__house__body_face" <<<"$log" && grep -qx "mcp__house__album_look" <<<"$log"
+check "止めていない道具（顔・アルバム）はそのまま" $?
+rm -f "$PETIT_DATA_DIR/characters/mio/config/settings.json"
+
 if [ "$fails" -gt 0 ]; then echo "$fails 件失敗"; exit 1; fi
 echo "すべて ok"
