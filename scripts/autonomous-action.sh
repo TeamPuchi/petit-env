@@ -397,7 +397,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
 #   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
-# relations-mcp はまだコンポーネントが無いため allowedTools に含めていない(用意できたら追加する)。
+#   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
+#   / house のノートのタグ・自分のノートを消す(note_tag・note_delete。上限 100 件に届いたら自分で空ける。petit-api#41)
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -438,6 +439,11 @@ mcp__petit-sns__sns_inbox,
 mcp__house__note_list,
 mcp__house__note_read,
 mcp__house__note_write,
+mcp__house__note_tag,
+mcp__house__note_delete,
+mcp__house__relation_list,
+mcp__house__relation_update,
+mcp__house__relation_clear,
 mcp__house__mail_read,
 mcp__house__mail_send,
 mcp__house__body_now,

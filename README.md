@@ -12,14 +12,10 @@ M5 Petit(ぷち)をDockerで動かすためのumbrella実行環境です。[peti
 > ([petit-infra](https://github.com/TeamPuchi/petit-infra) の `50-web-hosting`)。
 > ここだけ `m5-` 接頭辞を残しているのはそのためです。
 
-> **Phase 1 (2026-07): authored, build-untested**
-> このリポジトリは、Docker未導入の開発機の上で書かれました。`docker build` / `docker compose up` は
-> まだ一度も実行できていません。検証できたのは以下のみです:
-> - YAML構文(`python -c "import yaml; yaml.safe_load(...)"`)
-> - シェルスクリプト構文(`bash -n`)
-> - Dockerfileの静的な妥当性(目視・バージョン整合性の確認)
->
-> 実機(Docker導入済み環境)でのビルド・起動確認はPhase 1の残タスクです。
+> **いまの状態(2026-09-29)**: クラウド版(AKATSUKI)のぷちコンテナ `petit-core` のもとです。EC2(t4g・arm64)のホストで
+> [petit-infra](https://github.com/TeamPuchi/petit-infra) の compose から動いています。Phase 1(2026-07)に Docker の無い開発機で
+> 書いたときは build 未確認でしたが、2026-09-23 に amd64・arm64 とも build と起動を確かめました(残りは [`docs/cloud/TODO.md`](./docs/cloud/TODO.md))。
+> `:8765` で動く家 API のリポは TeamPuchi/petit-api(2026-09-26 に m5-petit-app から改名。コンテナ内のパスは `m5-petit-app` のまま)。
 
 ## 構成
 
@@ -35,12 +31,11 @@ scripts/
   sync-repos.sh / .ps1        # 各コンポーネントを repos/ にclone/pull
   start.sh / .ps1             # sync-repos + docker compose up をまとめて実行
   petit.sh                    # update / logs / status / stop
-  entrypoint.sh                # コンテナのエントリポイント(MCP設定生成 + supercronic + 家API + 体験デーモン見張り)
+  entrypoint.sh                # コンテナのエントリポイント(MCP設定生成 + supercronic + 家API)
   vendor-components.sh         # components.lock の版を vendor/ に展開・EC2 ホストへ渡す束を作る(手元で実行)
   install-components.sh        # build 中に venv を作る(Dockerfile.core から)
   gen-mcp-config.sh            # CHARACTER_IDS ごとに記憶 MCP・SNS-MCP の設定を作る(起動時)
   autonomous-action.sh         # 自律行動スクリプト(コンテナ内汎用版)
-  experience-watchdog.sh       # 体験デーモン見張り(Phase 1時点ではプレースホルダー)
   run-for-each-character.sh    # CHARACTER_IDSを展開して各ジョブを実行する窓口
 release/
   start-windows.bat / start-macos.command   # ダブルクリック起動(Phase 4で運用開始予定)
@@ -223,9 +218,9 @@ M5デバイスとの接続はIP指定を基本とします(コンテナ内から
 
 ## 既知の制約(Phase 1)
 
-- **ビルド確認済み(K7・2026-09-23)**。`docker build` / `docker compose up` は通り、supercronic・claude CLIの起動・cronジョブの発火・T3の匿名ボリューム所有権を確認済みです(cloud sandbox・amd64での代替検証。実機arm64での確認は未実施 → [`docs/cloud/TODO.md`](./docs/cloud/TODO.md) T7)
-- **notes-mcp / relations-mcp はまだ含まれていません**。この2つのMCPサーバーのリポジトリがまだ無いため、`autonomous-action.sh` の allowedTools には含めていません(用意でき次第、追加予定)
-- **体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しません**。`scripts/experience-watchdog.sh` は対象ディレクトリが見つからなければ何もせずスキップする、将来のためのプレースホルダーです
+- **ビルド確認済み**。K7(2026-09-23)に amd64 で、同じ日に EC2(t4g・arm64)でも build が通り(petit-infra `docs/spikes.md` §2)、いまは EC2 のホストで動いています。残りは [`docs/cloud/TODO.md`](./docs/cloud/TODO.md)
+- **ローカル版の notes-mcp / relations-mcp は、家 API の MCP サーバー `house` に移りました**。ノートは `note_*`(2026-09-27)、関係(相手ごとの好きなもの・苦手なこと・大事なこと・気持ち・親しさ)は `relation_*`(akatsuki-petit#171)。どちらも `autonomous-action.sh` の allowedTools に入っています。ローカルの `relations.json` をクラウドへ移す道具はまだありません
+- **ローカル版の体験デーモン(experience-daemon)は置いていません**。手元の PC から M5 の `/sensors` を読んで「身体の記録」を残すものでしたが、クラウドでは機体の出来事が IoT Core 経由で家 API に届き、家 API が体の記録として残して、自律行動・会話の頭に「体の知らせ」として渡します(ぷちは house の `body_since` で読む。akatsuki-petit#117)。そのため見張り(`experience-watchdog.sh`)と5分ごとの cron は外しました
 - `docker-compose.release.yml` / `release/*` は雛形です。 EC2 ホスト上でローカル build して `petit-core:latest` を作る運用にしました(上記「EC2 ホストでの petit-core イメージの build」参照・レジストリは未導入)。焼き込むのは m5-petit-app(リポは TeamPuchi/petit-api)・petit-memory・petit-sns(SNS-MCP)・petit-desire(欲求。2026-09-26 から)の4つで、petit-mcp・petit-scripts はまだ焼き込んでいません(クラウドでは機体は MQTT 経由のため)
 - **EC2での実運用側の compose は [petit-infra](https://github.com/TeamPuchi/petit-infra) の `compose/docker-compose.yml` が正本**です。このリポジトリの compose 2本は開発用・雛形として残しています
 - **petit-env ↔ petit-infra の環境変数**(T5): `CHARACTER_IDS` は petit-infra 側で入りました。K14 で petit-mio.env(雛形)をそのまま食わせて家 API が起動することを確認済み。残りは docs/cloud/TODO.md の T5

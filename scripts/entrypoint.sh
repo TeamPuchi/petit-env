@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # petit-env コンテナのエントリポイント。
 #
-# MCP 設定の生成・supercronic(cron代替)・家 API・体験デーモン見張りをまとめて起動する。
+# MCP 設定の生成・supercronic(cron代替)・家 API をまとめて起動する。
 # PID 1 は tini(Dockerfile.core の ENTRYPOINT)。孤児プロセスの回収とシグナルの中継はそちら。
 # 各サービスの起動失敗が全体を道連れにしないよう、失敗してもコンテナ自体は生き続ける
 # (バックグラウンド実行 + 個別ログファイルへ隔離)。
@@ -61,23 +61,10 @@ else
   echo "[entrypoint] 警告: $DASHBOARD_DIR/main.py が見つからない(焼き込み・sync-repos 未実行?)。家 API はスキップ" >&2
 fi
 
-# --- 3. 体験デーモン見張り (起動時に一度だけ起こす。以後はcronの見張りジョブに任せる) ---
-if [ -f /opt/petit/scripts/experience-watchdog.sh ]; then
-  IFS=',' read -ra CHARS <<< "${CHARACTER_IDS:-}"
-  for c in "${CHARS[@]}"; do
-    c_trimmed="$(echo "$c" | xargs)"
-    [ -z "$c_trimmed" ] && continue
-    /opt/petit/scripts/experience-watchdog.sh "$c_trimmed" >> "$LOG_DIR/experience-$c_trimmed.log" 2>&1 &
-    echo "[entrypoint] 体験デーモン見張りを起動: $c_trimmed"
-  done
-else
-  echo "[entrypoint] 警告: experience-watchdog.sh が見つからない。体験デーモンはスキップ" >&2
-fi
-
 echo "[entrypoint] 起動完了。フォアグラウンドで待機します"
 
 # コンテナを生かし続ける(いずれかの子プロセスの終了を待つのではなく無限待機)。
-# exec tail にすると、このシェルが起こした子(体験デーモン見張り等)が終わっても tail が
+# exec tail にすると、このシェルが起こした子(家 API の見張りループ等)が終わっても tail が
 # 回収せずゾンビとして残る(K14 で確認)。bash のまま待てば bash が回収する。
 # SIGTERM/SIGINT は tini(PID 1)からこの bash に届き、docker compose down / stop で正常終了する。
 sleep infinity &

@@ -5,12 +5,12 @@
 # 書く代わりに、この1本の窓口スクリプトがCHARACTER_IDS環境変数を動的に展開する。
 #
 # Usage:
-#   run-for-each-character.sh <autonomous|desire|diary|memory-sleep|experience-watchdog>
+#   run-for-each-character.sh <autonomous|desire|diary|memory-sleep>
 set -u
 
 JOB="${1:-}"
 if [ -z "$JOB" ]; then
-  echo "Usage: $0 <autonomous|desire|diary|memory-sleep|experience-watchdog>" >&2
+  echo "Usage: $0 <autonomous|desire|diary|memory-sleep>" >&2
   exit 1
 fi
 
@@ -91,9 +91,6 @@ for c in "${CHARS[@]}"; do
       else
         echo "[run-for-each-character] $REPOS_DIR/petit-memory が未同期。memory-sleepスキップ (character=$CHARACTER_ID)" >&2
       fi
-      ;;
-    experience-watchdog)
-      /opt/petit/scripts/experience-watchdog.sh "$CHARACTER_ID"
       ;;
     *)
       echo "Unknown job: $JOB" >&2
