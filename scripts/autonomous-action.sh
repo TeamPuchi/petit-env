@@ -238,10 +238,11 @@ if [ "$SKIP_SCHEDULE" = false ]; then
 fi
 
 # --- 時間帯ルール ---
+# 声は house の body_speak(機体のスピーカー)。ローカル版の say(m5-mcp)はクラウドに無い(2026-09-29)。
 if [ "$HOUR" -ge 24 ] || [ "$HOUR" -lt 7 ]; then
-  TIME_RULE="現在は深夜帯。say, notify は絶対に使わないこと。静かに観察のみ。"
+  TIME_RULE="現在は深夜帯。声(body_speak)は絶対に使わないこと。静かに観察のみ。"
 else
-  TIME_RULE="say は${USER_ROOM}の視界で、人がいるときだけ使ってよい。${USER_NAME}が${USER_ROOM}にいる場合はsayを積極的に使う。"
+  TIME_RULE="声(body_speak)は、${USER_ROOM}に人がいそうなときだけ使ってよい(体の知らせ・body_now で、近くに何かがいる・触られた などを確かめてから)。"
 fi
 
 # --- ルーチン判定(20%の確率でルーチン回) ---
@@ -265,16 +266,22 @@ CLAUDE_MODEL="${CLAUDE_MODEL:-sonnet}"
 # --- settings.json から制限を読む ---
 PERMISSION_RULES=""
 if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
-  ALLOW_CAMERA=$(jq -r '.allow_camera // true' "$SETTINGS_FILE" 2>/dev/null)
-  ALLOW_SOUND=$(jq -r '.allow_sound // true' "$SETTINGS_FILE" 2>/dev/null)
+  # jq の `//` は false も「無い」とみなす（`false // true` は true）ので、false を読み落とさないよう null だけを既定にする
+  ALLOW_CAMERA=$(jq -r '.allow_camera | if . == null then true else . end' "$SETTINGS_FILE" 2>/dev/null)
+  ALLOW_SOUND=$(jq -r '.allow_sound | if . == null then true else . end' "$SETTINGS_FILE" 2>/dev/null)
   ALLOW_MIC=$(jq -r '.allow_microphone // false' "$SETTINGS_FILE" 2>/dev/null)
-  [ "$ALLOW_CAMERA" = "false" ] && PERMISSION_RULES="${PERMISSION_RULES}- カメラ(take_snapshot)は今は使わないこと。\n"
-  [ "$ALLOW_SOUND" = "false" ]  && PERMISSION_RULES="${PERMISSION_RULES}- 音(play_sound, play_icon)は今は出さないこと。\n"
+  [ "$ALLOW_CAMERA" = "false" ] && PERMISSION_RULES="${PERMISSION_RULES}- カメラ(body_glance・body_gaze・take_snapshot)は今は使わないこと。\n"
+  [ "$ALLOW_SOUND" = "false" ]  && PERMISSION_RULES="${PERMISSION_RULES}- 声・音(body_speak・play_sound・play_icon)は今は出さないこと。\n"
   [ "$ALLOW_MIC" = "false" ]    && PERMISSION_RULES="${PERMISSION_RULES}- マイク(mic_start)は今は使わないこと。\n"
 fi
-# まいぷち。の設定(設定の関所の出力)で切られていれば、それも足す(akatsuki-petit#103・#159)
-case "$SETTINGS_OUT" in *camera=off*) PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。写真を撮る・周りを見る道具は使わないこと。\n" ;; esac
-case "$SETTINGS_OUT" in *speaker=off*) PERMISSION_RULES="${PERMISSION_RULES}- お喋り(スピーカー)は里親が止めている。声や音を出す道具は使わないこと。\n" ;; esac
+# まいぷち。の設定(設定の関所の出力)で切られていれば、それも足す(akatsuki-petit#103・#159)。
+# 切られている道具は allowedTools からも外す(家 API も断るが、呼ぶ前に使えないと分かるように)
+CAMERA_OFF=false
+SPEAKER_OFF=false
+[ "${ALLOW_CAMERA:-true}" = "false" ] && CAMERA_OFF=true
+[ "${ALLOW_SOUND:-true}" = "false" ] && SPEAKER_OFF=true
+case "$SETTINGS_OUT" in *camera=off*) CAMERA_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。写真を撮る・周りを見る道具は使わないこと。\n" ;; esac
+case "$SETTINGS_OUT" in *speaker=off*) SPEAKER_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- お喋り(スピーカー)は里親が止めている。声や音を出す道具は使わないこと。\n" ;; esac
 
 # --- プロンプト組み立て ---
 if [ -f "$CHARACTER_DIR/TODO_ACTIVE.md" ]; then
@@ -316,8 +323,9 @@ if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$BODY_NEWS" ]; then
   BODY_ARGS=("$CHARACTER_ID")
   [ "$DRY_RUN" = true ] && BODY_ARGS+=(--peek)
   BODY_NOTICE=$(timeout 30 "${HOUSE_PY[@]}" "$BODY_NEWS" "${BODY_ARGS[@]}" 2>>"$LOG_FILE")
-  # ログには件数(行数)だけ。中身(いつ触られたか等)は残さない
-  [ -n "$BODY_NOTICE" ] && echo "[body] 知らせ $(echo "$BODY_NOTICE" | grep -c '^- ') 行" >> "$LOG_FILE"
+  # 知らせは 1 行(種類ごとの回数と最後の時刻。PetitOnes の量に合わせた。家 API 2026-09-29〜。古い家 API は数行)。
+  # ログには、あったことと行数だけ。中身(いつ触られたか等)は残さない
+  [ -n "$BODY_NOTICE" ] && echo "[body] 知らせ $(printf '%s\n' "$BODY_NOTICE" | grep -c .) 行" >> "$LOG_FILE"
 fi
 
 # --- いまの気分(欲求) ---
@@ -372,6 +380,8 @@ ${DESIRE_SECTION}
 - ${TIME_RULE}
 - 人がいないことはよくある
 - 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
+- 体(机の上の機体)の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
+- 機体のカメラで見たもの(body_glance・body_gaze)はアルバムに残り、里親さんにも見える。見た目ごと覚えておきたいときは memory の save_visual_memory に、道具が返す image_path と photo_id を渡す
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
 }${BODY_NOTICE:+
@@ -392,10 +402,12 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
-#   petit-mcp (m5-mcp) / petit-memory (memory) / petit-desire (desire-system) / petit-sns (petit-sns)
+#   petit-memory (memory。見た目ごと残す save_visual_memory も) / petit-desire (desire-system) / petit-sns (petit-sns)
+#   (ローカル版の m5-mcp は、キャラ固有の MCP 設定にあるときだけ下で足す)
 #   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
 #   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
+#     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
 #   / house のノートのタグ・自分のノートを消す(note_tag・note_delete。上限 100 件に届いたら自分で空ける。petit-api#41)
@@ -404,21 +416,6 @@ Read($CHARACTER_DIR/**),
 Write,
 Edit,
 Glob($CHARACTER_DIR/**),
-mcp__m5-mcp__print_text,
-mcp__m5-mcp__print_image_text,
-mcp__m5-mcp__take_snapshot,
-mcp__m5-mcp__look,
-mcp__m5-mcp__blink,
-mcp__m5-mcp__play_sound,
-mcp__m5-mcp__get_sensor_data,
-mcp__m5-mcp__show_face,
-mcp__m5-mcp__list_faces,
-mcp__m5-mcp__list_sounds,
-mcp__m5-mcp__set_volume,
-mcp__m5-mcp__get_volume,
-mcp__m5-mcp__play_icon,
-mcp__m5-mcp__sleep,
-mcp__m5-mcp__wake,
 mcp__memory__remember,
 mcp__memory__search_memories,
 mcp__memory__recall,
@@ -426,6 +423,7 @@ mcp__memory__list_recent_memories,
 mcp__memory__get_memory_stats,
 mcp__memory__create_episode,
 mcp__memory__search_episodes,
+mcp__memory__save_visual_memory,
 mcp__desire-system__get_desires,
 mcp__desire-system__satisfy_desire,
 mcp__desire-system__boost_desire,
@@ -448,15 +446,41 @@ mcp__house__mail_read,
 mcp__house__mail_send,
 mcp__house__schedule_read,
 mcp__house__schedule_change,
+mcp__house__book_list,
+mcp__house__book_read,
+mcp__house__book_bookmark,
+mcp__house__book_finish,
 mcp__house__body_now,
 mcp__house__body_since,
 mcp__house__body_face,
 mcp__house__body_speak,
+mcp__house__body_wait_touch,
 mcp__house__body_glance,
-mcp__house__body_gaze
+mcp__house__body_gaze,
+mcp__house__album_list,
+mcp__house__album_look,
+mcp__house__album_mark_seen
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
+
+# ローカル版の機体の道具(m5-mcp)は、キャラ固有の MCP 設定(config/autonomous-mcp.json)に m5-mcp が
+# あるときだけ許可する。クラウドの家には m5-mcp が無く、体の道具は house の body_* (2026-09-29・#171 H6)
+if jq -e '.mcpServers["m5-mcp"]' "$CHARACTER_DIR/config/autonomous-mcp.json" > /dev/null 2>&1; then
+  for t in print_text print_image_text take_snapshot look blink play_sound get_sensor_data show_face list_faces \
+           list_sounds set_volume get_volume play_icon sleep wake; do
+    ALLOWED_TOOLS="${ALLOWED_TOOLS},mcp__m5-mcp__$t"
+  done
+fi
+# 里親が目(カメラ)・お喋り(スピーカー)を止めていれば、その道具は許可しない(家 API も断る)
+drop_tools() {  # drop_tools <道具名>...
+  local t
+  for t in "$@"; do
+    ALLOWED_TOOLS=$(printf ',%s,' "$ALLOWED_TOOLS" | sed "s/,$t,/,/g; s/^,//; s/,\$//")
+  done
+}
+[ "$CAMERA_OFF" = true ] && drop_tools mcp__house__body_glance mcp__house__body_gaze mcp__m5-mcp__take_snapshot
+[ "$SPEAKER_OFF" = true ] && drop_tools mcp__house__body_speak mcp__m5-mcp__play_sound mcp__m5-mcp__play_icon
 
 if [ -n "$TEST_PROMPT_STRING" ]; then
   PROMPT="$TEST_PROMPT_STRING"

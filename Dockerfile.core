@@ -17,8 +17,8 @@ FROM ubuntu:24.04
 # buildx が自動で渡す(amd64 / arm64)。stage 内で ARG 宣言しないと RUN から参照できない。
 ARG TARGETARCH
 ARG NODE_MAJOR=22
-# claude CLI は engines.node ">=22.0.0"。dist-tag stable の版を固定する。
-ARG CLAUDE_CODE_VERSION=2.1.267
+# claude CLI は engines.node ">=22.0.0"。dist-tag stable の版を固定する（2026-09-29: 2.1.267 → 2.1.277）。
+ARG CLAUDE_CODE_VERSION=2.1.277
 ARG UV_VERSION=0.12.17
 ARG SUPERCRONIC_VERSION=v0.2.47
 # supercronic はアーキごとに別アセット・別 sha256(2026-09-22 実測)
