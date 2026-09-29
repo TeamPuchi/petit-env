@@ -6,8 +6,12 @@
 # パスはすべてコンテナ内パス(/opt/petit/... , /data/...)。
 #
 # supercronicの書式は標準cron(5フィールド)+ @hourly 等のショートハンドに対応。
-# @reboot 相当の処理(ダッシュボード起動・体験デーモンの初回起動)は
-# supercronicではなく entrypoint.sh 側で行う。
+# @reboot 相当の処理(家 API の起動)は supercronic ではなく entrypoint.sh 側で行う。
+#
+# ローカル版にあった「体験デーモン見張り(experience-watchdog・5分ごと)」は置かない。体験デーモンは
+# 手元の PC から M5 の HTTP /sensors を読んで「身体の記録」を残すものだったが、クラウドでは機体の出来事が
+# IoT Core 経由で家 API に届き、家 API が体の記録(BODY#)として残す。自律行動・会話の頭に「体の知らせ」として
+# 渡し、ぷちは house の body_since で読む(akatsuki-petit#117・#171 H13)。
 
 # 自律行動: 20分ごとに CHARACTER_IDS の各キャラを順に実行
 */20 * * * * /opt/petit/scripts/run-for-each-character.sh autonomous >> /data/logs/autonomous-cron.log 2>&1
@@ -25,8 +29,3 @@
 # claude CLI の会話記録(~/.claude/projects 等)を消す: 毎日3:17、24時間より古いもの(K21)
 # 記憶は記憶 MCP が持つので、claude 側には残さない
 17 3 * * * /opt/petit/scripts/purge-claude-transcripts.sh >> /data/logs/purge-claude-cron.log 2>&1
-
-# 体験デーモン見張り: 5分ごと
-# Phase 1時点では体験デーモン(experience-daemon)相当の公開コンポーネントがまだ存在しないため、
-# experience-watchdog.sh は対象ディレクトリが無ければ何もせずスキップする(将来の有効化に備えたプレースホルダー)
-*/5 * * * * /opt/petit/scripts/run-for-each-character.sh experience-watchdog >> /data/logs/experience-watchdog-cron.log 2>&1

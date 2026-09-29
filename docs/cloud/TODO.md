@@ -1,6 +1,6 @@
 # petit-env クラウド版 v0 に向けた TODO
 
-最終更新: 2026-09-24
+最終更新: 2026-09-29（いまの作りに合わせて状態を直した。下の各節は当時の調べとして残す）
 
 このリポジトリは fork のため **GitHub Issues が無効**（fork の既定）で、Issue を立てられなかった。
 そのためここで追う。Settings → Features → Issues を有効にすれば Issue に移せる。
@@ -11,16 +11,17 @@
 
 | ID | 優先 | 件名 | 状態 |
 |---|---|---|---|
-| T1 | 🔴 | supercronic が arm64 で静かに壊れる | 適用済み・amd64で実build確認済み(→T7)。arm64実機は未確認 |
-| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | 適用済み・実build確認済み(→T7) |
-| T3 | 🔴 | dev の `:ro` × `uv run` を解く | 適用済み・実build確認済み(→T7) |
-| T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | K14で実装・amd64で家API起動とMCP一覧を確認。arm64実機は未確認 |
-| T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | 未着手。K7でCHARACTER_IDS欠落を再確認(petit-infra側の対応待ち) |
-| T6 | 🟡 | ぷちコンテナ `:8765` の正本を決める | 判断待ち |
-| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | cloud sandbox(amd64)で実施・完了。 EC2実機(arm64)は未実施 |
-| T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | petit-env 側は適用済み。petit-infra 側が残 |
-| T9 | 🟡 | 小さな修正まとめ | 一部適用(`.dockerignore`・`grep -c`)。`VOLUME`・bind アドレスは残 |
-| T10 | ⚪ | 音声2件の fork | 未着手 |
+| T1 | 🔴 | supercronic が arm64 で静かに壊れる | **済み**。`Dockerfile.core` が `TARGETARCH` で URL と sha256 を切り替える。arm64 は petit-infra `docs/spikes.md` §2（2026-09-23・t4g.small）で build を確認 |
+| T2 | 🔴 | Node 22 へ上げ、claude CLI と uv を固定 | **済み**（`NODE_MAJOR=22`・`CLAUDE_CODE_VERSION`・`UV_VERSION` を固定） |
+| T3 | 🔴 | dev の `:ro` × `uv run` を解く | **済み**（K7 で確認） |
+| T4 | 🔴 | `Dockerfile.core` に焼き込みの COPY を実装 | **済み**。`components.lock` の SHA を焼き込み、EC2（t4g・arm64）のホストで動いている |
+| T5 | 🔴 | petit-env ↔ petit-infra の環境変数・認証の不一致 | **ほぼ済み**。`CHARACTER_IDS` は petit-infra の `petit-<pid>.env` に入った。認証は API キーを置かず、ぷちごとのボリュームで `claude login`（2026-09-24 決定・`CLAUDE_CONFIG_DIR`）。機体は IoT Core 経由で家 API が受ける（`PETIT_IOT_*`）。**残り**: 手元（dev）用の `.env.example`・`sample-character/config/autonomous-mcp.json` にある `M5_HOST(S)` の IP 直書き（旧オンプレの名残。クラウドでは使わない） |
+| T6 | 🟡 | ぷちコンテナ `:8765` の正本を決める | **決まった**: (b) 家 API。リポは TeamPuchi/petit-api（2026-09-26 に m5-petit-app から改名）。コンテナ内のパスは `m5-petit-app` のまま |
+| T7 | 🔴 | EC2(t4g) で実 build と起動確認・EBS サイジング | **build と起動は済み**（spikes.md §2・いま EC2 で動いている）。**残り**: EBS サイジングの実測 |
+| T8 | 🟡 | 埋め込みモデルのキャッシュを永続化 | **済み**（petit-infra の compose にぷちごとの `petit-hf-cache*` ボリューム）。uv のキャッシュは未対応のまま（範囲外） |
+| T9 | 🟡 | 小さな修正まとめ | **済み**。`VOLUME` は petit-infra の compose が `/data`・`/home/petit/.claude` を明示マウントしている。家 API の bind は既定 `0.0.0.0`（`main.py` の `HOST`） |
+| T10 | ⚪ | 音声2件の fork | 未着手（クラウドの声は VOICEVOX の別コンテナで、この2つは使っていない） |
+| T11 | 🟡 | ローカル版にあって置いてあるだけだったもの（akatsuki-petit#171 H13） | **2026-09-29**: relations-mcp は家 API の `house` の `relation_*` に移して自律行動の許可に入れた。体験デーモンは家 API の体の記録（`BODY#`・`body_since`）が同じ役をするので、見張り（`experience-watchdog.sh`）と cron を外した |
 
 ---
 
