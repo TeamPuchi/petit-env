@@ -33,8 +33,14 @@ if [ ! -d "$CHARACTER_DIR" ]; then
 fi
 
 # キャラクターごとの最大ターン数 (環境変数 MAX_TURNS で上書き可、なければ settings.json から読む)
+# W12（頭脳の原価・2026-09-30）: settings.json の値（既定 20）は PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ちにする。
+# 9/29〜30 の本番は 1 回平均 7.4 ターン。0 にすると頭打ちしない（前のまま）。MAX_TURNS を渡したときはそれがそのまま効く
 if [ -z "${MAX_TURNS:-}" ]; then
   MAX_TURNS=$(python3 -c "import json,sys; d=json.load(open('${SETTINGS_FILE}')); print(d.get('max_turns', 20))" 2>/dev/null || echo 20)
+  TURNS_CAP="${PETIT_AUTONOMOUS_MAX_TURNS:-5}"
+  if [[ "$TURNS_CAP" =~ ^[0-9]+$ ]] && [ "$TURNS_CAP" -gt 0 ] && [[ "$MAX_TURNS" =~ ^[0-9]+$ ]] && [ "$MAX_TURNS" -gt "$TURNS_CAP" ]; then
+    MAX_TURNS="$TURNS_CAP"
+  fi
 fi
 
 # .env (キャラ固有 or 全体) があれば読み込む
@@ -262,6 +268,9 @@ else
   echo "通常回 (RAND=$ROUTINE_RAND >= 20)" >> "$LOG_FILE"
 fi
 CLAUDE_MODEL="${CLAUDE_MODEL:-sonnet}"
+# W12: 組み込みの道具（--tools。"" で CLI の既定＝全部）と、続きにする文脈の上限（トークン。0 で上限なし）
+BUILTIN_TOOLS="${PETIT_AUTONOMOUS_TOOLS-Read,Write,Edit,Glob,Skill,WebSearch,WebFetch,ToolSearch}"
+CONTEXT_MAX="${PETIT_AUTONOMOUS_CONTEXT_MAX:-30000}"
 
 # --- settings.json から制限を読む ---
 PERMISSION_RULES=""
@@ -380,6 +389,9 @@ ${DESIRE_SECTION}
 - ${TIME_RULE}
 - 人がいないことはよくある
 - 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
+- 1回の自律行動でやることは、1つか2つで足りる(次の回もある)
+- 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙・SNS・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
+- TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
 - 体(机の上の機体)の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
 - 機体のカメラで見たもの(body_glance・body_gaze)はアルバムに残り、里親さんにも見える。見た目ごと覚えておきたいときは memory の save_visual_memory に、道具が返す image_path と photo_id を渡す
 ${MAILBOX_NOTICE:+
@@ -527,6 +539,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "[TIME_RULE] $TIME_RULE"
     echo "[ROUTINE_MODE] $ROUTINE_MODE"
     echo "[SKILLS] ${SKILLS_DIR:-なし}"
+    echo "[MODEL] $CLAUDE_MODEL [MAX_TURNS] $MAX_TURNS [TOOLS] ${BUILTIN_TOOLS:-既定(全部)} [CONTEXT_MAX] $CONTEXT_MAX"
     echo ""
     echo "--- PROMPT ---"
     echo "$PROMPT"
@@ -539,6 +552,7 @@ else
   mkdir -p "$CHARACTER_DIR/state"
   SESSION_FILE="$CHARACTER_DIR/state/.heartbeat-session-id"
   SESSION_DATE_FILE="$CHARACTER_DIR/state/.heartbeat-session-date"
+  SESSION_CONTEXT_FILE="$CHARACTER_DIR/state/.heartbeat-session-context"
 
   TODAY=$(date "+%Y-%m-%d")
   if [ -f "$SESSION_DATE_FILE" ]; then
@@ -550,11 +564,24 @@ else
   fi
   echo "$TODAY" > "$SESSION_DATE_FILE"
 
+  # 文脈を直近だけにする（W12）: 前の回の終わりに文脈（最後の 1 回の呼び出しで読ませたトークン数）が
+  # CONTEXT_MAX を越えていたら、続きにせず新しいセッションで始める。前の日のこと・前の回のことは
+  # SOUL.md・TODO・日記のまとめ・記憶で持つ。元の仕組み（PetitOnes）は同じセッションをずっと続けていた
+  if [ "$CONTEXT_MAX" -gt 0 ] 2>/dev/null && [ -f "$SESSION_FILE" ] && [ -f "$SESSION_CONTEXT_FILE" ]; then
+    LAST_CONTEXT=$(cat "$SESSION_CONTEXT_FILE" 2>/dev/null)
+    if [[ "$LAST_CONTEXT" =~ ^[0-9]+$ ]] && [ "$LAST_CONTEXT" -gt "$CONTEXT_MAX" ]; then
+      echo "[文脈リセット] 前回の文脈 $LAST_CONTEXT トークン > $CONTEXT_MAX" >> "$LOG_FILE"
+      rm -f "$SESSION_FILE"
+    fi
+  fi
+
   CLAUDE_ARGS=(--model "$CLAUDE_MODEL" --max-turns "${MAX_TURNS:-5}" --output-format stream-json --verbose)
   if [ "${#MCP_CONFIGS[@]}" -gt 0 ]; then
     CLAUDE_ARGS+=(--mcp-config "${MCP_CONFIGS[@]}" --strict-mcp-config)
   fi
   CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" ${SKILLS_DIR:+"$SKILLS_DIR"} --allowedTools "$ALLOWED_TOOLS")
+  # 組み込みの道具は使うものだけ載せる（W12）。付けないと Bash・Task なども毎回載り、1 回の入力が約 2.6 万トークン重い
+  [ -n "$BUILTIN_TOOLS" ] && CLAUDE_ARGS+=(--tools "$BUILTIN_TOOLS")
   # 思考の要約を stream に残す（akatsuki-petit#154）。既定（omitted）だと thinking の中身が空になる。
   # 空にすると付けない。フラグを知らない古い claude なら、付けずにやり直す（claude_run）
   THINKING_DISPLAY="${PETIT_CLAUDE_THINKING_DISPLAY-summarized}"
@@ -634,7 +661,15 @@ else
     fi
     COST=$(echo "$RESULT_JSON" | jq -r '.total_cost_usd // 0' 2>/dev/null)
     TURNS=$(echo "$RESULT_JSON" | jq -r '.num_turns // 0' 2>/dev/null)
-    echo "[usage] type=$run_type turns=$TURNS cost_usd=$COST" >> "$LOG_FILE"
+    # 最後の呼び出しで読ませた量（次の回を続きにするかの目安。数だけ残す）
+    local context
+    context=$(grep '"type":"assistant"' "$STREAM_FILE" 2>/dev/null | tail -n 1       | jq -r '.message.usage | ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0))' 2>/dev/null)
+    if [[ "$context" =~ ^[0-9]+$ ]]; then
+      echo "$context" > "$SESSION_CONTEXT_FILE"
+    else
+      context="?"
+    fi
+    echo "[usage] type=$run_type turns=$TURNS cost_usd=$COST context=$context" >> "$LOG_FILE"
   }
 
   if [ -f "$SESSION_FILE" ]; then
