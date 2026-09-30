@@ -267,7 +267,8 @@ else
   ROUTINE_MODE="通常回。SOUL.md の行動原則に従って行動せよ。"
   echo "通常回 (RAND=$ROUTINE_RAND >= 20)" >> "$LOG_FILE"
 fi
-CLAUDE_MODEL="${CLAUDE_MODEL:-sonnet}"
+# 正式名で固定（W15）。別名 sonnet だと CLI を上げたときに黙って変わる（2.1.280 は claude-sonnet-5、2.1.284 からは claude-sonnet-5-5）
+CLAUDE_MODEL="${CLAUDE_MODEL:-claude-sonnet-5-5}"
 # W12: 組み込みの道具（--tools。"" で CLI の既定＝全部）と、続きにする文脈の上限（トークン。0 で上限なし）
 BUILTIN_TOOLS="${PETIT_AUTONOMOUS_TOOLS-Read,Write,Edit,Glob,Skill,WebSearch,WebFetch,ToolSearch}"
 CONTEXT_MAX="${PETIT_AUTONOMOUS_CONTEXT_MAX:-30000}"

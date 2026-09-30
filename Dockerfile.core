@@ -17,8 +17,10 @@ FROM ubuntu:24.04
 # buildx が自動で渡す(amd64 / arm64)。stage 内で ARG 宣言しないと RUN から参照できない。
 ARG TARGETARCH
 ARG NODE_MAJOR=22
-# claude CLI は engines.node ">=22.0.0"。dist-tag stable の版を固定する（2026-09-29: 2.1.267 → 2.1.277）。
-ARG CLAUDE_CODE_VERSION=2.1.277
+# claude CLI は engines.node ">=22.0.0"。版を固定する（2026-09-29: 2.1.267 → 2.1.277 stable）。
+# 2026-09-30（W15）: 2.1.277 → 2.1.285（latest）。Sonnet 5.5（claude-sonnet-5-5）を知っているのは 2.1.284 から
+# （stable の 2.1.280 は「知らないモデル」扱いで動き、額・文脈の上限が違う）。stable が 2.1.284 以上になったら戻してよい。
+ARG CLAUDE_CODE_VERSION=2.1.285
 ARG UV_VERSION=0.12.17
 ARG SUPERCRONIC_VERSION=v0.2.47
 # supercronic はアーキごとに別アセット・別 sha256(2026-09-22 実測)
