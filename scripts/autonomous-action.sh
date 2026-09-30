@@ -411,6 +411,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
 #   / house のノートのタグ・自分のノートを消す(note_tag・note_delete。上限 100 件に届いたら自分で空ける。petit-api#41)
+#   / スキル(Skill。読書の reading など。置き場は下の SKILLS_DIR・W11)
+#   / ノートの終わりに書き足す note_append・調べもの(WebSearch・WebFetch)(W11・なぎさん 2026-09-30)
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -437,6 +439,7 @@ mcp__petit-sns__sns_inbox,
 mcp__house__note_list,
 mcp__house__note_read,
 mcp__house__note_write,
+mcp__house__note_append,
 mcp__house__note_tag,
 mcp__house__note_delete,
 mcp__house__relation_list,
@@ -460,7 +463,10 @@ mcp__house__body_gaze,
 mcp__house__album_list,
 mcp__house__album_look,
 mcp__house__album_mark_seen,
-mcp__house__album_say
+mcp__house__album_say,
+Skill,
+WebSearch,
+WebFetch
 TOOLS
 )
 ALLOWED_TOOLS=$(echo "$ALLOWED_TOOLS" | tr -d '\n' | sed 's/, */,/g')
@@ -504,6 +510,14 @@ if [ "${#MCP_CONFIGS[@]}" -eq 0 ]; then
   echo "[autonomous-action] MCP 設定が無い。MCP無しで実行する。" >> "$LOG_FILE"
 fi
 
+# スキル(Claude Code の Skills。W11): 共通の skills/ とこのぷちの characters/<id>/skills/ を
+# gen-skills.sh が ${PETIT_SKILLS_DIR}/<id>/.claude/skills/ にまとめ、--add-dir で渡す(会話の家 API も同じ置き場)。
+# 毎回まとめ直すので、ぷちのスキルを書き換えれば次の回から効く。作れなくても自律行動は続ける。
+SKILLS_DIR="${PETIT_SKILLS_DIR:-/opt/petit/run/skills}/$CHARACTER_ID"
+GEN_SKILLS="${PETIT_GEN_SKILLS:-/opt/petit/scripts/gen-skills.sh}"
+[ -f "$GEN_SKILLS" ] && bash "$GEN_SKILLS" "$CHARACTER_ID" >> "$LOG_FILE" 2>&1
+[ -d "$SKILLS_DIR/.claude/skills" ] || SKILLS_DIR=""
+
 if [ "$DRY_RUN" = true ]; then
   {
     echo "=== DRY RUN ==="
@@ -511,6 +525,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "[ROUTINE_RAND=$ROUTINE_RAND]"
     echo "[TIME_RULE] $TIME_RULE"
     echo "[ROUTINE_MODE] $ROUTINE_MODE"
+    echo "[SKILLS] ${SKILLS_DIR:-なし}"
     echo ""
     echo "--- PROMPT ---"
     echo "$PROMPT"
@@ -538,7 +553,7 @@ else
   if [ "${#MCP_CONFIGS[@]}" -gt 0 ]; then
     CLAUDE_ARGS+=(--mcp-config "${MCP_CONFIGS[@]}" --strict-mcp-config)
   fi
-  CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" --allowedTools "$ALLOWED_TOOLS")
+  CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" ${SKILLS_DIR:+"$SKILLS_DIR"} --allowedTools "$ALLOWED_TOOLS")
   # 思考の要約を stream に残す（akatsuki-petit#154）。既定（omitted）だと thinking の中身が空になる。
   # 空にすると付けない。フラグを知らない古い claude なら、付けずにやり直す（claude_run）
   THINKING_DISPLAY="${PETIT_CLAUDE_THINKING_DISPLAY-summarized}"

@@ -16,6 +16,8 @@ echo "[entrypoint] $(date -Iseconds) 起動開始 (CHARACTER_IDS=${CHARACTER_IDS
 # --- 0. ぷちごとの MCP 設定(記憶 MCP・SNS-MCP)を作る(K14) ---
 # 秘密は書かない(scripts/gen-mcp-config.sh の冒頭)。失敗しても起動は続ける。
 /opt/petit/scripts/gen-mcp-config.sh || echo "[entrypoint] 警告: MCP 設定の生成に失敗" >&2
+# ぷちごとのスキル（共通の skills/ ＋ そのぷちの skills/。W11）。自律行動と会話の claude が --add-dir で読む
+/opt/petit/scripts/gen-skills.sh || echo "[entrypoint] 警告: スキルの置き場の生成に失敗" >&2
 
 # --- 1. supercronic (cron) ---
 if [ -f /opt/petit/cron/petit.cron ]; then

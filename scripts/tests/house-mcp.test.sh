@@ -45,7 +45,7 @@ check "memory・petit-sns はそのまま" $?
 rm -rf "$PETIT_DATA_DIR/logs"
 PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run > /dev/null 2>&1
 log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
-for t in note_list note_read note_write note_tag note_delete mail_read mail_send relation_list relation_update relation_clear book_list book_read book_bookmark book_finish; do
+for t in note_list note_read note_write note_append note_tag note_delete mail_read mail_send relation_list relation_update relation_clear book_list book_read book_bookmark book_finish; do
   grep -qx "mcp__house__$t" <<<"$log"
   check "allowedTools に mcp__house__$t" $?
 done
