@@ -35,6 +35,7 @@ scripts/
   vendor-components.sh         # components.lock の版を vendor/ に展開・EC2 ホストへ渡す束を作る(手元で実行)
   install-components.sh        # build 中に venv を作る(Dockerfile.core から)
   gen-mcp-config.sh            # CHARACTER_IDS ごとに記憶 MCP・SNS-MCP の設定を作る(起動時)
+  gen-skills.sh                # CHARACTER_IDS ごとにスキルの置き場を作る(起動時・自律行動の毎回)
   autonomous-action.sh         # 自律行動スクリプト(コンテナ内汎用版)
   run-for-each-character.sh    # CHARACTER_IDSを展開して各ジョブを実行する窓口
 release/
@@ -114,6 +115,8 @@ docker compose exec core claude login
 
 > 記憶 MCP(`memory`)と SNS-MCP(`petit-sns`)の設定は `scripts/gen-mcp-config.sh` が起動時に `CHARACTER_IDS` のぷちごとに `/opt/petit/run/mcp/<id>.json` へ作る(秘密は書かない。`PETIT_SNS_INTERNAL_SECRET`・`ANTHROPIC_API_KEY`・AWS の認証情報はコンテナの env から claude 経由で MCP に引き継がれる)。`PETIT_HOUSE_TABLE` があれば記憶は DynamoDB(pk `P#<pid>`)、無ければ `/data/characters/<id>/memory.db`。
 > 欲求 MCP(`desire-system`・petit-desire)も同じく自動生成する(2026-09-26)。`PETIT_HOUSE_TABLE` があれば家の表の `STATE#DESIRES`(家 API の `GET /petits/{pid}/mood` が読む行)、無ければ `/data/characters/<id>/data/desires.json`。5分ごとの更新(`run-for-each-character.sh desire`)と、自律行動のプロンプトに差し込む「いまの気分」(`desire-status`)も同じ env を使う。欲求の定義はキャラの `config/desire_config.json`、無ければ petit-desire の既定(仮置き)。
+> **ぷちのスキル**(W11・2026-09-29)。Claude Code の Skills(`<置き場>/.claude/skills/<名前>/SKILL.md`。やり方の手順書)を、自律行動と会話の両方の claude に `--add-dir` で渡す。共通のスキルは petit-env の `skills/`(イメージの `/opt/petit/skills/`。いまは読書の `reading`)、ぷちだけのスキルは `/data/characters/<id>/skills/<名前>/SKILL.md`(同じ名前なら共通を置き換え・空の SKILL.md なら使わない。`sample-character/skills/README.md`)。`scripts/gen-skills.sh` が起動時と自律行動の毎回に `/opt/petit/run/skills/<id>/.claude/skills/` へまとめ、会話は家 API(petit-api main.py の `PETIT_SKILLS_DIR`)が同じ置き場を渡す。スキルを開く `Skill` と、調べもの用の `WebSearch`・`WebFetch`(なぎさん 2026-09-30)は自律行動の許可に入れてある。確かめ方: `bash scripts/tests/skills.test.sh`。
+
 > それ以外の MCP サーバー(機体など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns`・`desire-system` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
 
 ### コンポーネントのコードをどう渡すか(dev と release)
