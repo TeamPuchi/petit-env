@@ -2,7 +2,7 @@
 # 頭脳の原価を下げる（W12・2026-09-30）の載せ方を確かめる。
 # - gen-mcp-config.sh: PETIT_MCP_ALWAYS_LOAD に書いたサーバーだけ "alwaysLoad": true（既定は付けない）
 # - autonomous-action.sh:
-#   - claude に --model（既定 sonnet）・--tools（使う組み込みの道具だけ）を付ける
+#   - claude に --model（既定 claude-sonnet-5-5・W15）・--tools（使う組み込みの道具だけ）を付ける
 #   - --max-turns は settings.json の値を PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ち。MAX_TURNS を渡せばそれ
 #   - 前の回の文脈が PETIT_AUTONOMOUS_CONTEXT_MAX（既定 30000）を越えていたら、続きにせず新しいセッション
 #   - 回の終わりに文脈の大きさ（数だけ）を state に残す
@@ -67,7 +67,7 @@ arg_of() {  # arg_of <flag> — 最後の呼び出しでの値
 
 rm -f "$CHAR/state/.heartbeat-session-id" "$CHAR/state/.heartbeat-session-context"
 run
-[ "$(arg_of --model)" = "sonnet" ]; check "--model は既定 sonnet" $?
+[ "$(arg_of --model)" = "claude-sonnet-5-5" ]; check "--model は既定 claude-sonnet-5-5（正式名）" $?
 [ "$(arg_of --tools)" = "Read,Write,Edit,Glob,Skill,WebSearch,WebFetch,ToolSearch" ]; check "--tools は使う組み込みの道具だけ" $?
 [ "$(arg_of --max-turns)" = "5" ]; check "settings.json の 20 を 5 で頭打ち" $?
 [ "$(cat "$CHAR/state/.heartbeat-session-context")" = "8502" ]; check "最後の呼び出しの文脈を残す" $?
@@ -103,6 +103,6 @@ echo "$OUT" | grep -q "1回の自律行動でやることは、1つか2つで足
 echo "$OUT" | grep -q "同じ中身をいくつもの置き場に重ねて書かない"; check "プロンプト: 重ねて書かない" $?
 echo "$OUT" | grep -q "同じ回の中でもう一度 remember しなくてよい"; check "プロンプト: 同じ remember を繰り返さない" $?
 echo "$OUT" | grep -q "気づいたことを日誌のように毎回書き足さなくてよい"; check "プロンプト: TODO を日誌にしない" $?
-echo "$OUT" | grep -q "\[MODEL\] sonnet \[MAX_TURNS\] 5"; check "dry-run にモデル・ターンを出す" $?
+echo "$OUT" | grep -q "\[MODEL\] claude-sonnet-5-5 \[MAX_TURNS\] 5"; check "dry-run にモデル・ターンを出す" $?
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
