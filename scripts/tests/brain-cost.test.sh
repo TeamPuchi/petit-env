@@ -31,8 +31,13 @@ check() {  # 名前 条件の終了コード
 
 # 1. gen-mcp-config.sh
 bash "$HERE/gen-mcp-config.sh" mio > /dev/null
+mkdir -p "$PETIT_REPOS_DIR/petit-desire"; echo '[project]' > "$PETIT_REPOS_DIR/petit-desire/pyproject.toml"
+bash "$HERE/gen-mcp-config.sh" mio > /dev/null
+jq -e '.mcpServers["desire-system"].alwaysLoad == true and ([.mcpServers.memory, .mcpServers["petit-sns"]] | map(has("alwaysLoad")) | any | not)' "$PETIT_MCP_DIR/mio.json" > /dev/null
+check "既定では desire-system だけ alwaysLoad" $?
+PETIT_MCP_ALWAYS_LOAD= bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 jq -e '[.mcpServers[] | has("alwaysLoad")] | any | not' "$PETIT_MCP_DIR/mio.json" > /dev/null
-check "既定では alwaysLoad を付けない" $?
+check "PETIT_MCP_ALWAYS_LOAD を空にすると付けない" $?
 PETIT_MCP_ALWAYS_LOAD="petit-sns, memory" bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 jq -e '.mcpServers.memory.alwaysLoad == true and .mcpServers["petit-sns"].alwaysLoad == true' "$PETIT_MCP_DIR/mio.json" > /dev/null
 check "PETIT_MCP_ALWAYS_LOAD のサーバーに alwaysLoad" $?
@@ -96,6 +101,8 @@ grep -q -- "--resume s-new" "$FAKE_CLAUDE_ARGS"; check "PETIT_AUTONOMOUS_CONTEXT
 OUT=$(env PETIT_HOUSE_TABLE= PATH="$WORK/bin:$PATH" bash "$SCRIPT" mio --dry-run 2>/dev/null)
 echo "$OUT" | grep -q "1回の自律行動でやることは、1つか2つで足りる"; check "プロンプト: 1つか2つで足りる" $?
 echo "$OUT" | grep -q "同じ中身をいくつもの置き場に重ねて書かない"; check "プロンプト: 重ねて書かない" $?
+echo "$OUT" | grep -q "同じ回の中でもう一度 remember しなくてよい"; check "プロンプト: 同じ remember を繰り返さない" $?
+echo "$OUT" | grep -q "気づいたことを日誌のように毎回書き足さなくてよい"; check "プロンプト: TODO を日誌にしない" $?
 echo "$OUT" | grep -q "\[MODEL\] sonnet \[MAX_TURNS\] 5"; check "dry-run にモデル・ターンを出す" $?
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

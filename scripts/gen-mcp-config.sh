@@ -33,7 +33,10 @@
 #   claude は MCP の道具が多いと説明を最初には載せず、要るときに ToolSearch で探す（1 往復増える）。
 #   カンマ区切りで書いたサーバー（例 desire-system,house）には "alwaysLoad": true を付け、道具の説明を
 #   毎回ぜんぶ載せる（ToolSearch が減る代わりに、そのサーバーの道具の説明の分だけ毎回の入力が重くなる）。
-#   既定は空（どれも後から探す）。手元の claude 2.1.285 で数えた重さ（1 回の入力あたり）:
+#   既定は desire-system（道具 5 つ・約 1,400 トークン。自律行動のプロンプトが毎回 get_desires・satisfy_desire を
+#   促し、9/29〜30 の本番で ToolSearch の多くがその読み込みだった）。空にすると全部後から探す。
+#   家の道具（house）はサーバーごとではなく、よく使う道具だけを家 API の house_mcp.py が最初から載せる
+#   （PETIT_HOUSE_PRELOAD_TOOLS）。手元の claude 2.1.285 で数えた重さ（1 回の入力あたり）:
 #   desire-system 約 1,400・memory 約 7,000・house 約 9,000・petit-sns 約 2,500 トークン（W12 の報告）。
 set -euo pipefail
 
@@ -106,7 +109,7 @@ gen_one() {
 
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
   jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" \
-    --arg always "${PETIT_MCP_ALWAYS_LOAD:-}" '
+    --arg always "${PETIT_MCP_ALWAYS_LOAD-desire-system}" '
     ($always | split(",") | map(gsub("^ +| +$"; "")) | map(select(. != ""))) as $al
     | {mcpServers: ({memory: $m, "petit-sns": $s}
                     + (if $d != null then {"desire-system": $d} else {} end)
