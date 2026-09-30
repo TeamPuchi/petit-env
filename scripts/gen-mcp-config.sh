@@ -28,6 +28,13 @@
 #   ぷちが自分のノート（NOTE#）と手紙（MAIL#）を読み書きする道具（note_* / mail_*）。
 #   ここで渡すのは PETIT_ID・PETIT_DATA_DIR だけ。家の表・鍵の表・KMS・リージョンは
 #   コンテナの env（家 API と同じ PETIT_HOUSE_TABLE など）をそのまま読む。
+#
+# 道具の説明を最初から載せるサーバー（PETIT_MCP_ALWAYS_LOAD。W12・2026-09-30）:
+#   claude は MCP の道具が多いと説明を最初には載せず、要るときに ToolSearch で探す（1 往復増える）。
+#   カンマ区切りで書いたサーバー（例 desire-system,house）には "alwaysLoad": true を付け、道具の説明を
+#   毎回ぜんぶ載せる（ToolSearch が減る代わりに、そのサーバーの道具の説明の分だけ毎回の入力が重くなる）。
+#   既定は空（どれも後から探す）。手元の claude 2.1.285 で数えた重さ（1 回の入力あたり）:
+#   desire-system 約 1,400・memory 約 7,000・house 約 9,000・petit-sns 約 2,500 トークン（W12 の報告）。
 set -euo pipefail
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
@@ -99,9 +106,12 @@ gen_one() {
 
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
   jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" \
-    '{mcpServers: ({memory: $m, "petit-sns": $s}
-                   + (if $d != null then {"desire-system": $d} else {} end)
-                   + (if $h != null then {house: $h} else {} end))}' \
+    --arg always "${PETIT_MCP_ALWAYS_LOAD:-}" '
+    ($always | split(",") | map(gsub("^ +| +$"; "")) | map(select(. != ""))) as $al
+    | {mcpServers: ({memory: $m, "petit-sns": $s}
+                    + (if $d != null then {"desire-system": $d} else {} end)
+                    + (if $h != null then {house: $h} else {} end))}
+    | .mcpServers |= with_entries(if (.key | IN($al[])) then .value.alwaysLoad = true else . end)' \
     > "$OUT_DIR/$id.json.tmp"
   mv "$OUT_DIR/$id.json.tmp" "$OUT_DIR/$id.json"
   echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off) house=$([[ "$house" != null ]] && echo on || echo off))"
