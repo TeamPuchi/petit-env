@@ -31,7 +31,7 @@ check() {  # 名前 条件の終了コード
 R="$ROOT/skills/reading/SKILL.md"
 head -n 1 "$R" | grep -qx -- "---" && grep -q "^name: reading$" "$R" && grep -q "^description: .*book_read" "$R"
 check "skills/reading/SKILL.md に name と description（いつ使うか）がある" $?
-for w in "chars=500" "book_list" "book_bookmark" "book_finish" "note_read" "note_write" "search_memories" "要約はしない" "「『題』を読みながら」" '"読書"'; do
+for w in "chars=500" "book_list" "book_bookmark" "book_finish" "note_read" "note_append" "WebSearch" "WebFetch" "search_memories" "要約はしない" "「『題』を読みながら」" '"読書"'; do
   grep -qF -- "$w" "$R"
   check "reading に $w" $?
 done
@@ -82,8 +82,12 @@ PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run > /dev/null 2
 log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
 grep -qx "\[SKILLS\] $PETIT_SKILLS_DIR/mio" <<<"$log"
 check "自律行動は毎回スキルの置き場を作り、それを渡す" $?
-grep -qx "Skill" <<<"$log"
-check "allowedTools に Skill" $?
+for t in Skill WebSearch WebFetch mcp__house__note_append; do
+  grep -qx "$t" <<<"$log"
+  check "allowedTools に $t" $?
+done
+! grep -q "なぎさん" "$R" && ! grep -q "^> " "$R"
+check "reading にすすめの引用・名前を残さない（ぷちに向けた言葉で書く）" $?
 grep -q -- '--add-dir "$PETIT_DATA_DIR" ${SKILLS_DIR:+"$SKILLS_DIR"}' "$HERE/autonomous-action.sh"
 check "claude の --add-dir にスキルの置き場を足す" $?
 
