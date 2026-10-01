@@ -394,7 +394,8 @@ ${DESIRE_SECTION}
 - 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙・SNS・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
 - TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
 - 体(机の上の機体)の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
-- 機体のカメラで見たもの(body_glance・body_gaze)はアルバムに残り、里親さんにも見える。見た目ごと覚えておきたいときは memory の save_visual_memory に、道具が返す image_path と photo_id を渡す
+- 機体のカメラで見たもの(body_glance・body_gaze)はアルバムに残り、里親さんにも見える。見た目ごと覚えておきたいときは memory の save_visual_memory に、道具が返す image_path と photo_id を渡す。外に持ち出されているときは、知らない人を写さないように自分で気をつける
+- 眠いときは、house の body_sleep で自分の体(机の上の機体)を眠らせてよい(起こすのは body_wake。里親さんが画面を3回たたいても起きる)。眠らせたら、remember に「スリープした」と残す
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
 }${BODY_NOTICE:+
@@ -421,6 +422,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
 #   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
 #     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29。写真にひとこと残す album_say は W9)
+#     自分で体を眠らせる／起こす body_sleep・body_wake(PetitOnes の m5-mcp sleep / wake。akatsuki-petit#186)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
 #   / house のノートのタグ・鍵・自分のノートを消す(note_tag・note_lock・note_delete。上限 100 件を超えると鍵の無い古いものから消えるので、残したいものに鍵を掛ける。petit-api#41・W10 petit-api#59)
@@ -474,6 +476,8 @@ mcp__house__body_speak,
 mcp__house__body_wait_touch,
 mcp__house__body_glance,
 mcp__house__body_gaze,
+mcp__house__body_sleep,
+mcp__house__body_wake,
 mcp__house__album_list,
 mcp__house__album_look,
 mcp__house__album_mark_seen,
