@@ -247,23 +247,11 @@ if [ "$SKIP_SCHEDULE" = false ]; then
     fi
   fi
 
+  # 活動時間の外では動かない(なぎさん 2026-10-03「自分で設定してなくても、勿論設定してても、規定の枠内じゃなきゃだめ」)。
+  # それまでは外でも毎時0分だけ、昼(8〜18時)30%・夜10%のくじで動いていた。家 API の関所(settings_state.py)と同じ。
   if [ "$IS_ACTIVE" = false ]; then
-    if [ "$MINUTE" -ne 0 ]; then
-      echo "非アクティブ時間帯 :${MINUTE} スキップ" >> "$LOG_FILE"
-      exit 0
-    fi
-    RAND=$(( $(od -An -tu2 -N2 /dev/urandom | tr -d ' ') % 100 ))
-    if [ "$HOUR" -ge 8 ] && [ "$HOUR" -lt 18 ]; then
-      if [ "$RAND" -ge 30 ]; then
-        echo "昼間スキップ (RAND=$RAND >= 30)" >> "$LOG_FILE"
-        exit 0
-      fi
-    else
-      if [ "$RAND" -ge 10 ]; then
-        echo "深夜スキップ (RAND=$RAND >= 10)" >> "$LOG_FILE"
-        exit 0
-      fi
-    fi
+    printf '非アクティブ時間帯 %02d:%02d スキップ\n' "$HOUR" "$MINUTE" >> "$LOG_FILE"
+    exit 0
   fi
 fi
 
