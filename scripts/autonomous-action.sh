@@ -137,6 +137,30 @@ if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_H
   esac
 fi
 
+# --- メンテナンスモード(2026-10-02) ---
+# 運営がメンテナンスモードを「ぷちの自律行動も休ませる」付きで入れているあいだ(petit-infra の
+# scripts/maintenance.sh on --pause-petits)は自律行動しない。状態は accounts 表の CONFIG#maintenance / META。
+# 判定は家 API の scripts/maintenance_state.py gate:
+#   0 = 動いてよい → 続ける / 3 = 休む → 何もせず抜ける / それ以外 = 読めない → 続ける(普段どおり動く)
+# 欲求の更新・日記・記憶の整理(cron の別ジョブ)はここを通らないので止まらない。
+# 対象外: 手で渡すプロンプト(-p / --test-prompt)・家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
+#   関所の入っていない古い家 API・PETIT_MAINTENANCE_GATE=0。
+MAINTENANCE_GATE="$HOUSE_API_DIR/scripts/maintenance_state.py"
+if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ]    && [ "${PETIT_MAINTENANCE_GATE:-1}" != "0" ] && [ -f "$MAINTENANCE_GATE" ]; then
+  MAINTENANCE_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$MAINTENANCE_GATE" gate 2>>"$LOG_FILE")
+  MAINTENANCE_CODE=$?
+  case "$MAINTENANCE_CODE" in
+    0) ;;
+    3)
+      echo "メンテナンス中のため自律行動しない ($MAINTENANCE_OUT)" >> "$LOG_FILE"
+      exit 0
+      ;;
+    *)
+      echo "メンテナンスの状態を読めないので普段どおり続ける (exit=$MAINTENANCE_CODE $MAINTENANCE_OUT)" >> "$LOG_FILE"
+      ;;
+  esac
+fi
+
 # --- 日時の取得(コンテナは常にLinuxなので date -d のみ対応) ---
 if [ -n "$OVERRIDE_DATE" ]; then
   CURRENT_DATE=$(date -d "$OVERRIDE_DATE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
