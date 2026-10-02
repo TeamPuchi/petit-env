@@ -8,5 +8,5 @@
 # m5-petit-app は 2026-09-26 に TeamPuchi/petit-api へ改名した。名前の列（コンテナ内のパス）は据え置く。
 m5-petit-app  TeamPuchi/petit-api      46111f8b87658eb45c068db2efa4eba2f348bf63  .
 petit-memory  TeamPuchi/petit-memory  2d08572e7ed3d002cb3b707c91b82d093381311b  .
-petit-sns     TeamPuchi/petit-sns     3e87e4334c90e832aef20163eb449a81d729df00  sns-api
+petit-sns     TeamPuchi/petit-sns     031427a558d29e41e1ecd4f53c6bcd3694d34c01  sns-api
 petit-desire  TeamPuchi/petit-desire  8f71addb5d9acab5e9b3b9d29e21763efc1f171b  .
