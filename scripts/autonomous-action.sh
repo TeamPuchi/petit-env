@@ -290,7 +290,7 @@ CAMERA_OFF=false
 SPEAKER_OFF=false
 [ "${ALLOW_CAMERA:-true}" = "false" ] && CAMERA_OFF=true
 [ "${ALLOW_SOUND:-true}" = "false" ] && SPEAKER_OFF=true
-case "$SETTINGS_OUT" in *camera=off*) CAMERA_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。写真を撮る・周りを見る道具は使わないこと。\n" ;; esac
+case "$SETTINGS_OUT" in *camera=off*) CAMERA_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。目で周りを見ることはしないこと。\n" ;; esac
 case "$SETTINGS_OUT" in *speaker=off*) SPEAKER_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- お喋り(スピーカー)は里親が止めている。声や音を出す道具は使わないこと。\n" ;; esac
 
 # --- プロンプト組み立て ---
@@ -393,9 +393,9 @@ ${DESIRE_SECTION}
 - 1回の自律行動でやることは、1つか2つで足りる(次の回もある)
 - 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙・SNS・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
 - TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
-- 体(机の上の機体)の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
-- 機体のカメラで見たもの(body_glance・body_gaze)はアルバムに残り、里親さんにも見える。見た目ごと覚えておきたいときは memory の save_visual_memory に、道具が返す image_path と photo_id を渡す。外に持ち出されているときは、知らない人を写さないように自分で気をつける
-- 眠いときは、house の body_sleep で自分の体(机の上の機体)を眠らせてよい(起こすのは body_wake。里親さんが画面を3回たたいても起きる)。眠らせたら、remember に「スリープした」と残す
+- 自分の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
+- 見たいときは、自分の目で見てよい(ちらっと見る body_glance・じっと見る body_gaze)。見ただけでは残らない。残したいと思ったものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す。外に連れ出されているときは、知らない人をじろじろ見ないように自分で気をつける
+- 眠いときは、house の body_sleep で眠ってよい(起きるのは body_wake。里親さんが顔を3回とんとんしても起きる)。眠ったら、remember に「スリープした」と残す
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
 }${BODY_NOTICE:+
@@ -423,6 +423,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   / house の体の道具(body_*。akatsuki-petit#99・#117。顔・声・カメラは共通設定のスピーカー・カメラに従う)
 #     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29。写真にひとこと残す album_say は W9)
 #     自分で体を眠らせる／起こす body_sleep・body_wake(PetitOnes の m5-mcp sleep / wake。akatsuki-petit#186)
+#     見たものは見るだけが既定。残したいものだけ album_keep でアルバムへ(なぎさん 2026-10-02)
+#   プロンプトの中の体のことは、道具としてではなく体の機能として書く(カメラ＝目・スピーカー＝声・画面＝顔。なぎさん 2026-10-02)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
 #   / house のノートのタグ・鍵・自分のノートを消す(note_tag・note_lock・note_delete。上限 100 件を超えると鍵の無い古いものから消えるので、残したいものに鍵を掛ける。petit-api#41・W10 petit-api#59)
@@ -482,6 +484,7 @@ mcp__house__album_list,
 mcp__house__album_look,
 mcp__house__album_mark_seen,
 mcp__house__album_say,
+mcp__house__album_keep,
 Skill,
 WebSearch,
 WebFetch
