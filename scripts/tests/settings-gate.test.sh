@@ -2,8 +2,9 @@
 # autonomous-action.sh の「設定の関所」を確かめる(akatsuki-petit#159)。
 # 家 API の settings_state.py の代わりに、終了コードと出力を選べる偽の python を置いて分岐だけを見る。
 # チュートリアルの関所は偽の python が 0(達成済み)を返して通す。claude・AWS・Docker には触らない
-# (通る場合は --dry-run で止める)。時刻は --date で 10:20(既定の時間帯の外・0分でない)に固定するので、
+# (通る場合は --dry-run で止める)。時刻は --date で 10:20(既定の時間帯の外)に固定するので、
 # 関所を通らなければ settings.json 側の判定で「非アクティブ時間帯」になって止まる。
+# 時間帯の外は毎時0分でも動かない(前の「昼30%・夜10%」のくじは外した。なぎさん 2026-10-03)のも見る。
 #
 # Usage: bash scripts/tests/settings-gate.test.sh
 set -u
@@ -62,13 +63,24 @@ run_case() {  # 名前 期待(skip|run) 期待するログの語 [env...]
   if $ok; then echo "ok   $name"; else echo "FAIL $name (exit=$code)"; echo "$log" | head -5; fails=$((fails + 1)); fi
 }
 
-run_case "関所が動くと言えば、時間帯の外でも動く" run  "設定の関所: settings: fake"      PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0
+run_case "関所が動くと言えば settings.json を見ずに動く" run "設定の関所: settings: fake"  PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0
 run_case "関所が休むと言えば抜ける"               skip "設定の関所: settings: skip"      PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=3 FAKE_SETTINGS_OUT="settings: skip (off) camera=on speaker=on"
 run_case "読めないときは settings.json で決める"  skip "設定を読めないので settings.json" PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=2
 run_case "PETIT_SETTINGS_GATE=0 で外す"           skip "非アクティブ時間帯"              PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 PETIT_SETTINGS_GATE=0
 run_case "家の表が無い環境は関所なし"             skip "非アクティブ時間帯"              PETIT_HOUSE_TABLE=  FAKE_SETTINGS_CODE=0
 run_case "カメラを閉じていれば制限に足す"         run  "目(カメラ)は里親が閉じている"    PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 FAKE_SETTINGS_OUT="settings: run (active) camera=off speaker=on"
 run_case "お喋りを止めていれば制限に足す"         run  "お喋り(スピーカー)は里親が止めている" PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 FAKE_SETTINGS_OUT="settings: run (active) camera=on speaker=off"
+
+# settings.json で決めるとき(関所が無い・読めない): 時間帯の外は毎時0分でも、何度引いても動かない(くじは無い)
+for d in "2026-09-29 10:00" "2026-09-29 15:00" "2026-09-29 03:00" "2026-10-03 09:00"; do
+  for i in 1 2 3; do
+    DATE="$d" run_case "時間帯の外 $d は動かない(関所なし・$i 回目)" skip "非アクティブ時間帯" PETIT_HOUSE_TABLE=
+  done
+done
+DATE="2026-09-29 10:00" run_case "時間帯の外 10:00 は動かない(関所なし)"       skip "非アクティブ時間帯 10:00" PETIT_HOUSE_TABLE=
+DATE="2026-09-29 10:00" run_case "時間帯の外 10:00 は動かない(関所が読めない)" skip "非アクティブ時間帯 10:00" PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=2
+# 既定の時間帯(settings.json が無い・7-8・12-13・18-24)の中なら動く
+DATE="2026-09-29 12:20" run_case "既定の時間帯の中 12:20 は動く(関所なし)"      run  "" PETIT_HOUSE_TABLE=
 
 # 関所は settings_state.py <id> gate --now … --file … --dry-run の形で呼ばれる
 : > "$FAKE_GATE_CALLS"
