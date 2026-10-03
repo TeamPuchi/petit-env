@@ -29,20 +29,26 @@
 #   ここで渡すのは PETIT_ID・PETIT_DATA_DIR だけ。家の表・鍵の表・KMS・リージョンは
 #   コンテナの env（家 API と同じ PETIT_HOUSE_TABLE など）をそのまま読む。
 #
-# 道具の説明を最初から載せるサーバー（PETIT_MCP_ALWAYS_LOAD。W12・2026-09-30）:
+# 道具の説明を最初から載せる（W12・2026-09-30 → 2026-10-03 一覧を1か所に）:
 #   claude は MCP の道具が多いと説明を最初には載せず、要るときに ToolSearch で探す（1 往復増える）。
-#   カンマ区切りで書いたサーバー（例 desire-system,house）には "alwaysLoad": true を付け、道具の説明を
-#   毎回ぜんぶ載せる（ToolSearch が減る代わりに、そのサーバーの道具の説明の分だけ毎回の入力が重くなる）。
-#   既定は desire-system（道具 5 つ・約 1,400 トークン。自律行動のプロンプトが毎回 get_desires・satisfy_desire を
-#   促し、9/29〜30 の本番で ToolSearch の多くがその読み込みだった）。空にすると全部後から探す。
-#   家の道具（house）はサーバーごとではなく、よく使う道具だけを家 API の house_mcp.py が最初から載せる
-#   （PETIT_HOUSE_PRELOAD_TOOLS）。手元の claude 2.1.285 で数えた重さ（1 回の入力あたり）:
-#   desire-system 約 1,400・memory 約 7,000・house 約 9,000・petit-sns 約 2,500 トークン（W12 の報告）。
+#   - 道具ごと: 一覧は scripts/preload-tools.txt（mcp__<サーバー>__<道具> を1行に1つ。選び方もそこに）。
+#     ここでサーバーごとに分けて、各サーバーの env の PETIT_PRELOAD_TOOLS（道具の名前のカンマ区切り）に入れ、
+#     サーバー（house_mcp.py・petit-memory・petit-sns・petit-desire）が `_meta` の anthropic/alwaysLoad を付ける。
+#     コンテナの env PETIT_PRELOAD_TOOLS（同じ書き方・カンマ区切り）があればファイルの代わりにそれ（空なら何も載せない）。
+#     道具が1つも無いサーバーにも空で入れる（コンテナの env の同じ名前を MCP サーバーが引き継がないように）。
+#     どのサーバーにも当たらない名前（組み込みの道具・載せていないサーバー）は標準エラーで知らせる。
+#     名前が実在するか・印が付いたかは check-preload-tools.py が本番の設定で確かめる。
+#   - サーバーごと（PETIT_MCP_ALWAYS_LOAD）: カンマ区切りで書いたサーバーには "alwaysLoad": true を付け、
+#     道具の説明を毎回ぜんぶ載せる。既定は空（W12 の既定 desire-system は、欲求の道具 5 つで約 5,400 トークン。
+#     使うのは satisfy_desire がほとんどなので、2026-10-03 から道具ごとの一覧に入れた）。
+#   本番の claude 2.1.285・haiku で測った重さ（全部載せたとき）: house 33 個 約 3.3 万・memory 24 個 約 8,300・
+#   petit-sns 14 個 約 8,000・desire-system 5 個 約 5,400 トークン。
 set -euo pipefail
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
 REPOS_DIR="${PETIT_REPOS_DIR:-/opt/petit/repos}"
 OUT_DIR="${PETIT_MCP_DIR:-/opt/petit/run/mcp}"
+PRELOAD_FILE="${PETIT_PRELOAD_TOOLS_FILE:-$(dirname "$0")/preload-tools.txt}"
 
 command -v jq >/dev/null 2>&1 || { echo "[gen-mcp-config] jq が無い" >&2; exit 1; }
 
@@ -55,6 +61,15 @@ server_cmd() {
   else
     jq -n --arg d "$dir" --arg e "$exe" '{command: "uv", args: ["run", "--directory", $d, $e]}'
   fi
+}
+
+# 最初から載せる道具の一覧を JSON の配列で出す（env PETIT_PRELOAD_TOOLS があればそれ、無ければファイル）
+preload_json() {
+  if [[ -n "${PETIT_PRELOAD_TOOLS+x}" ]]; then
+    tr ',' '\n' <<< "$PETIT_PRELOAD_TOOLS"
+  elif [[ -f "$PRELOAD_FILE" ]]; then
+    sed 's/#.*//' "$PRELOAD_FILE"
+  fi | tr -d ' \t\r' | jq -R -s 'split("\n") | map(select(. != ""))'
 }
 
 memory_store() {
@@ -107,15 +122,26 @@ gen_one() {
       .env = {PETIT_ID: $id, PETIT_DATA_DIR: $data}')"
   fi
 
+  local preload
+  preload="$(preload_json)"
+
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
   jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" \
-    --arg always "${PETIT_MCP_ALWAYS_LOAD-desire-system}" '
+    --arg always "${PETIT_MCP_ALWAYS_LOAD-}" --argjson pl "$preload" '
     ($always | split(",") | map(gsub("^ +| +$"; "")) | map(select(. != ""))) as $al
     | {mcpServers: ({memory: $m, "petit-sns": $s}
                     + (if $d != null then {"desire-system": $d} else {} end)
                     + (if $h != null then {house: $h} else {} end))}
-    | .mcpServers |= with_entries(if (.key | IN($al[])) then .value.alwaysLoad = true else . end)' \
+    | .mcpServers |= with_entries(if (.key | IN($al[])) then .value.alwaysLoad = true else . end)
+    | .mcpServers |= with_entries(
+        ("mcp__" + .key + "__") as $p
+        | ([$pl[] | select(startswith($p)) | ltrimstr($p)] | join(",")) as $t
+        | .value.env.PETIT_PRELOAD_TOOLS = $t)' \
     > "$OUT_DIR/$id.json.tmp"
+  # どのサーバーにも当たらない名前（組み込みの道具・ここで載せていないサーバー・書き間違い）を知らせる
+  jq -r --argjson pl "$preload" '[.mcpServers | keys[] | "mcp__" + . + "__"] as $ps
+    | $pl[] | select(. as $n | [$ps[] | . as $p | $n | startswith($p)] | any | not)' "$OUT_DIR/$id.json.tmp" \
+    | while read -r n; do echo "[gen-mcp-config] 警告: 最初から載せる一覧の $n はどの MCP サーバーにも当たらない（載せない）" >&2; done
   mv "$OUT_DIR/$id.json.tmp" "$OUT_DIR/$id.json"
   echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off) house=$([[ "$house" != null ]] && echo on || echo off))"
 }
