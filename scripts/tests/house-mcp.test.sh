@@ -34,9 +34,9 @@ PETIT_HOUSE_TABLE=secret-table bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 jq -e --arg c "$PETIT_REPOS_DIR/m5-petit-app/.venv/bin/petit-house-mcp" \
   '.mcpServers.house.command == $c and .mcpServers.house.env.PETIT_ID == "mio"' "$PETIT_MCP_DIR/mio.json" > /dev/null
 check "house_mcp.py があれば house を載せる（PETIT_ID はそのぷち）" $?
-# env に書くのは PETIT_ID・PETIT_DATA_DIR だけ（表の名前・秘密はコンテナの env から届く）
-jq -e '.mcpServers.house.env | keys == ["PETIT_DATA_DIR", "PETIT_ID"]' "$PETIT_MCP_DIR/mio.json" > /dev/null
-check "house の env は PETIT_ID・PETIT_DATA_DIR だけ" $?
+# env に書くのは PETIT_ID・PETIT_DATA_DIR・最初から載せる道具（PETIT_PRELOAD_TOOLS）だけ（表の名前・秘密はコンテナの env から届く）
+jq -e '.mcpServers.house.env | keys == ["PETIT_DATA_DIR", "PETIT_ID", "PETIT_PRELOAD_TOOLS"]' "$PETIT_MCP_DIR/mio.json" > /dev/null
+check "house の env は PETIT_ID・PETIT_DATA_DIR・PETIT_PRELOAD_TOOLS だけ" $?
 # ほかの MCP は変わらず載る
 jq -e '.mcpServers | has("memory") and has("petit-sns")' "$PETIT_MCP_DIR/mio.json" > /dev/null
 check "memory・petit-sns はそのまま" $?

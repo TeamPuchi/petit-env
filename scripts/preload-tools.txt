@@ -1,0 +1,38 @@
+# 最初から載せる MCP の道具（ここが1か所の一覧・2026-10-03）
+#
+# claude は MCP の道具が多いと、説明を最初には載せず、要るときに ToolSearch で探す（1回に1ターン増え、
+# それまでの文脈を読み直す）。ここに書いた道具だけは説明を最初から載せる（ToolSearch が要らない）。
+# 代わりに、載せた分は毎回の入力（毎ターン）に乗る。
+#
+# 書き方: mcp__<サーバー>__<道具> を1行に1つ（claude での名前そのまま）。# から後ろは読まない。
+#   gen-mcp-config.sh がサーバーごとに分けて、各サーバーの env の PETIT_PRELOAD_TOOLS に入れる。
+#   サーバー（家 API の house_mcp.py・petit-memory・petit-sns・petit-desire）がその道具の `_meta` に
+#   `anthropic/alwaysLoad: true` を付ける。組み込みの道具（WebSearch など）はここでは変えられない。
+#   一時的に変えるならコンテナの env PETIT_PRELOAD_TOOLS（カンマ区切り・同じ書き方。空なら何も載せない）。
+#
+# 道具を増やした・名前を変えたとき:
+#   - 名前が実在するかは、本番の設定で `check-preload-tools.py` が確かめる（無い名前・印の付いていない道具で NG）。
+#     petit-infra の release.sh の確かめ（verify）でも流す。
+#   - よく使うかどうかは台帳 /data/usage/*.jsonl の tools から（petit-cost スキルの tool_use.py）。
+#
+# 選び方（2026-10-03・9/29〜10/3 の本番台帳 206 回と haiku の実測から）:
+#   載せた道具 1 トークンは、自律行動（毎回キャッシュが冷えている・平均 7 ターン）で 1回あたり約 1.9 トークン分、
+#   会話（ほぼ温かい・平均 2.7 ターン）で約 0.4 トークン分の費用。ToolSearch 1 回は、文脈（自律 約3.4万・
+#   会話 約6.6万）の読み直しで 約4,000〜7,000 トークン分。道具 1 つは約 400〜2,400 トークン。
+#   なので「その道具を使う回の割合」が自律でおよそ 3 割・会話で 1 割を越えるものだけ、載せると得になる。
+#   W12（9/30）の一覧は、使う割合の低い重い道具（body_face・note_list・note_append・欲求のサーバーまるごと）を
+#   含み、始まりの文脈が約1.3万トークン重かった。下の 7 つで約 5,000 トークン（約 8,000 減る）。
+#   回数は「その道具を使った回 / 全部の回」（自律 63 回・会話 139 回）。トークンは本番の haiku での実測・換算。
+mcp__desire-system__satisfy_desire  # 自律 42/63・会話 8/139・約1,050
+mcp__memory__remember               # 自律 27/63・会話 19/139・約1,100
+mcp__petit-sns__sns_inbox           # 自律 27/63・会話 3/139・約420
+mcp__petit-sns__sns_timeline        # 自律 10/63・会話 1/139・約340（sns_inbox と組で使う）
+mcp__house__body_now                # 自律 19/63・会話 11/139・約740
+mcp__house__body_since              # 自律 18/63・会話 7/139・約880（body_now と組で使う）
+mcp__house__mail_read               # 自律 22/63・会話 1/139・約580（未読の手紙があるとプロンプトが促す）
+#
+# 載せると損になる側（使う割合に比べて重い）。使い方が変わったら台帳を見て入れ替える:
+#   mcp__house__note_write 2,381（自律 7・会話 16）  mcp__house__body_speak 920（自律 3・会話 13）
+#   mcp__memory__save_visual_memory 950（会話 11）     mcp__house__note_read 630（自律 10・会話 5）
+#   mcp__house__album_list 480（自律 10）              mcp__house__album_look 690（会話 7）
+#   mcp__house__body_face 1,600（自律 5・会話 6）      mcp__desire-system__get_desires 1,630（プロンプトに欲求が入っている）

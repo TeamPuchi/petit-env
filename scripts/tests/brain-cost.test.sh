@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 頭脳の原価を下げる（W12・2026-09-30）の載せ方を確かめる。
 # - gen-mcp-config.sh: PETIT_MCP_ALWAYS_LOAD に書いたサーバーだけ "alwaysLoad": true（既定は付けない）
+#   最初から載せる道具の一覧（scripts/preload-tools.txt・2026-10-03）をサーバーごとに分けて env の PETIT_PRELOAD_TOOLS に
+#   - check-preload-tools.py: 一覧の名前が実在して印が付いているか（mcp の入った python があるときだけ・偽のサーバーで）
 # - autonomous-action.sh:
 #   - claude に --model（既定 claude-sonnet-5-5・W15）・--tools（使う組み込みの道具だけ）を付ける
 #   - --max-turns は settings.json の値を PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ち。MAX_TURNS を渡せばそれ
@@ -33,16 +35,87 @@ check() {  # 名前 条件の終了コード
 bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 mkdir -p "$PETIT_REPOS_DIR/petit-desire"; echo '[project]' > "$PETIT_REPOS_DIR/petit-desire/pyproject.toml"
 bash "$HERE/gen-mcp-config.sh" mio > /dev/null
-jq -e '.mcpServers["desire-system"].alwaysLoad == true and ([.mcpServers.memory, .mcpServers["petit-sns"]] | map(has("alwaysLoad")) | any | not)' "$PETIT_MCP_DIR/mio.json" > /dev/null
-check "既定では desire-system だけ alwaysLoad" $?
-PETIT_MCP_ALWAYS_LOAD= bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 jq -e '[.mcpServers[] | has("alwaysLoad")] | any | not' "$PETIT_MCP_DIR/mio.json" > /dev/null
-check "PETIT_MCP_ALWAYS_LOAD を空にすると付けない" $?
+check "既定ではどのサーバーにも alwaysLoad を付けない（道具ごとの一覧で載せる）" $?
 PETIT_MCP_ALWAYS_LOAD="petit-sns, memory" bash "$HERE/gen-mcp-config.sh" mio > /dev/null
 jq -e '.mcpServers.memory.alwaysLoad == true and .mcpServers["petit-sns"].alwaysLoad == true' "$PETIT_MCP_DIR/mio.json" > /dev/null
 check "PETIT_MCP_ALWAYS_LOAD のサーバーに alwaysLoad" $?
 jq -e '.mcpServers.memory.env.PETIT_MEMORY_PETIT_ID == "mio"' "$PETIT_MCP_DIR/mio.json" > /dev/null
 check "ほかの中身はそのまま" $?
+
+# 1b. 最初から載せる道具の一覧（1か所: scripts/preload-tools.txt）
+LIST="$(sed 's/#.*//' "$HERE/preload-tools.txt" | tr -d ' \t\r' | grep -v '^$')"
+[ -n "$LIST" ] && ! grep -qv '^mcp__[A-Za-z0-9-]*__[A-Za-z0-9_]*$' <<< "$LIST"
+check "一覧は mcp__<サーバー>__<道具> だけ" $?
+[ -z "$(sort <<< "$LIST" | uniq -d)" ]; check "一覧に同じ名前が2回無い" $?
+n="$(wc -l <<< "$LIST")"; [ "$n" -ge 3 ] && [ "$n" -le 20 ]; check "一覧はよく使う十数個まで（$n 個）" $?
+mkdir -p "$PETIT_REPOS_DIR/m5-petit-app"; echo '# placeholder' > "$PETIT_REPOS_DIR/m5-petit-app/house_mcp.py"
+bash "$HERE/gen-mcp-config.sh" mio > /dev/null 2> "$WORK/gen.err"
+for s in memory petit-sns desire-system house; do
+  want="$(grep "^mcp__${s}__" <<< "$LIST" | sed "s/^mcp__${s}__//" | paste -sd, -)"
+  jq -e --arg s "$s" --arg w "$want" '.mcpServers[$s].env.PETIT_PRELOAD_TOOLS == $w' "$PETIT_MCP_DIR/mio.json" > /dev/null
+  check "$s の env.PETIT_PRELOAD_TOOLS は一覧のその サーバーの分（$want）" $?
+done
+[ ! -s "$WORK/gen.err" ]; check "既定の一覧はどれもサーバーに当たる（警告が出ない）" $?
+PETIT_PRELOAD_TOOLS=" mcp__memory__remember,mcp__house__note_write , mcp__house__body_now,WebSearch,mcp__nope__x" \
+  bash "$HERE/gen-mcp-config.sh" mio > /dev/null 2> "$WORK/gen.err"
+jq -e '.mcpServers.memory.env.PETIT_PRELOAD_TOOLS == "remember" and .mcpServers.house.env.PETIT_PRELOAD_TOOLS == "note_write,body_now"
+       and .mcpServers["petit-sns"].env.PETIT_PRELOAD_TOOLS == "" and .mcpServers["desire-system"].env.PETIT_PRELOAD_TOOLS == ""' \
+  "$PETIT_MCP_DIR/mio.json" > /dev/null
+check "env PETIT_PRELOAD_TOOLS があればファイルの代わりにそれ（無いサーバーは空で入れる）" $?
+grep -q "WebSearch" "$WORK/gen.err" && grep -q "mcp__nope__x" "$WORK/gen.err"
+check "どのサーバーにも当たらない名前は警告" $?
+PETIT_PRELOAD_TOOLS= bash "$HERE/gen-mcp-config.sh" mio > /dev/null
+jq -e '[.mcpServers[].env.PETIT_PRELOAD_TOOLS] | all(. == "")' "$PETIT_MCP_DIR/mio.json" > /dev/null
+check "PETIT_PRELOAD_TOOLS を空にすると何も載せない" $?
+printf 'mcp__petit-sns__sns_post  # コメント\r\n\r\n# 行ごとコメント\r\nmcp__house__mail_read\r\n' > "$WORK/list.txt"
+PETIT_PRELOAD_TOOLS_FILE="$WORK/list.txt" bash "$HERE/gen-mcp-config.sh" mio > /dev/null
+jq -e '.mcpServers["petit-sns"].env.PETIT_PRELOAD_TOOLS == "sns_post" and .mcpServers.house.env.PETIT_PRELOAD_TOOLS == "mail_read"' \
+  "$PETIT_MCP_DIR/mio.json" > /dev/null
+check "一覧のファイルはコメント・空行・CRLF を読み飛ばす" $?
+rm -f "$PETIT_REPOS_DIR/m5-petit-app/house_mcp.py"
+
+# 1c. check-preload-tools.py（偽の MCP サーバー2つ: 印を付けるもの・付けないもの）
+PY="${PETIT_MCP_PYTHON:-python3}"
+if "$PY" -c 'import mcp' 2>/dev/null; then
+  cat > "$WORK/fake_server.py" <<'PY'
+import os, sys
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    from mcp.server.mcpserver import MCPServer as FastMCP
+mcp = FastMCP("fake")
+@mcp.tool()
+def alpha() -> str:
+    "a"
+    return "a"
+@mcp.tool()
+def beta(x: int = 0) -> str:
+    "b"
+    return "b"
+if os.environ.get("FAKE_HONOR") == "1":
+    want = [n for n in os.environ.get("PETIT_PRELOAD_TOOLS", "").split(",") if n]
+    for t in mcp._tool_manager.list_tools():
+        if t.name in want:
+            t.meta = {"anthropic/alwaysLoad": True}
+mcp.run()
+PY
+  jq -n --arg py "$PY" --arg f "$WORK/fake_server.py" \
+    '{mcpServers: {good: {command: $py, args: [$f], env: {FAKE_HONOR: "1", PETIT_PRELOAD_TOOLS: "alpha"}}}}' > "$WORK/ok.json"
+  "$PY" "$HERE/check-preload-tools.py" "$WORK/ok.json" --sizes > "$WORK/chk.out" 2>&1
+  check "check-preload-tools: 一覧の道具が実在して印が付いていれば 0" $?
+  grep -q '\* .* alpha' "$WORK/chk.out"; check "check-preload-tools: --sizes に載せる印" $?
+  jq -n --arg py "$PY" --arg f "$WORK/fake_server.py" \
+    '{mcpServers: {good: {command: $py, args: [$f], env: {FAKE_HONOR: "1", PETIT_PRELOAD_TOOLS: "alpha,gamma"}},
+                   deaf: {command: $py, args: [$f], env: {PETIT_PRELOAD_TOOLS: "beta"}}}}' > "$WORK/ng.json"
+  "$PY" "$HERE/check-preload-tools.py" "$WORK/ng.json" > "$WORK/chk.out" 2>&1
+  [ $? -eq 1 ]; check "check-preload-tools: 食い違いがあれば 1" $?
+  grep -q '^NG good: .*gamma' "$WORK/chk.out"; check "check-preload-tools: 実在しない名前を出す" $?
+  grep -q '^NG deaf: .*beta' "$WORK/chk.out"; check "check-preload-tools: 印の付いていない道具を出す" $?
+else
+  echo "skip check-preload-tools（mcp の入った python が無い。PETIT_MCP_PYTHON=<家 API の .venv の python> で動く）"
+fi
+
 bash "$HERE/gen-mcp-config.sh" mio > /dev/null  # 以降は既定の設定で
 
 # 2. autonomous-action.sh（偽の claude: 引数を残し、assistant 2 行と result 行を出す）
