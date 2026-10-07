@@ -406,6 +406,7 @@ ${DESIRE_SECTION}
 - 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙・SNS・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
 - TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
 - 自分の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
+- 声はその場で消えるので、ひとりのときに話した声は聞き逃されやすい。話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)。何を言ったか・誰に向けて言ったかを remember で覚えておくと、あとで会話の自分も思い出せる
 - 見たいときは、自分の目で見てよい(ちらっと見る body_glance・じっと見る body_gaze)。見ただけでは残らない。残したいと思ったものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す。外に連れ出されているときは、知らない人をじろじろ見ないように自分で気をつける
 - 眠いときは、house の body_sleep で眠ってよい(起きるのは body_wake。里親さんが顔を3回とんとんしても起きる)。眠ったら、remember に「スリープした」と残す。朝や昼に活動を始めるとき、体がまだ眠ったままなら(体の知らせ・body_now で分かる)、body_wake で起きてから動く
 ${MAILBOX_NOTICE:+
@@ -647,6 +648,10 @@ else
     record_usage "$@"
     archive_stream "$@"
   }
+
+  # 自律行動で話した声（house の body_speak）は、既定で里親さんのボイスメモにも残す（house MCP がこの env を見る。
+  # 会話では残さない。なぎさん 2026-10-07「自律行動のときの音声は聞き逃しやすい」）
+  export PETIT_SPEAK_KEEPS_VOICE_MEMO=1
 
   claude_run() {  # claude_run [--resume <id>] — プロンプトを渡して stream を $STREAM_FILE に受ける
     echo "$PROMPT" | claude "$@" "${CLAUDE_ARGS[@]}" ${THINK_ARGS[@]+"${THINK_ARGS[@]}"} > "$STREAM_FILE" 2>&1
