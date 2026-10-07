@@ -436,6 +436,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #     触られるのを待つ body_wait_touch(PetitOnes の wait_for_touch)と、見たものが残るアルバム(album_*。2026-09-29。写真にひとこと残す album_say は W9)
 #     自分で体を眠らせる／起こす body_sleep・body_wake(PetitOnes の m5-mcp sleep / wake。akatsuki-petit#186)
 #     見たものは見るだけが既定。残したいものだけ album_keep でアルバムへ(なぎさん 2026-10-02)
+#     自分で残した写真は album_delete で消せる(里親さんの写真・鍵の掛かった写真は消せない。なぎさん 2026-10-07)
 #   プロンプトの中の体のことは、道具としてではなく体の機能として書く(カメラ＝目・スピーカー＝声・画面＝顔。なぎさん 2026-10-02)
 #   / 欲求の形(shape_desire・retire_desire。akatsuki-petit#106)
 #   / house の関係(relation_*。ローカル版の relations-mcp の移し先。akatsuki-petit#171 H13)
@@ -496,6 +497,7 @@ mcp__house__album_list,
 mcp__house__album_look,
 mcp__house__album_say,
 mcp__house__album_keep,
+mcp__house__album_delete,
 Skill,
 WebSearch,
 WebFetch
