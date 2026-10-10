@@ -575,6 +575,9 @@ else
   SESSION_FILE="$CHARACTER_DIR/state/.heartbeat-session-id"
   SESSION_DATE_FILE="$CHARACTER_DIR/state/.heartbeat-session-date"
   SESSION_CONTEXT_FILE="$CHARACTER_DIR/state/.heartbeat-session-context"
+  # 「<session_id> <CLI の total_cost_usd>」の 1 行。CLI の total_cost_usd は --resume で続けたセッションの
+  # 累計なので、次の回はこれを引いて 1 回ぶんの額にする（家 API の usage_ledger.py の台帳と同じ考え方）
+  SESSION_COST_FILE="$CHARACTER_DIR/state/.heartbeat-session-cost"
 
   TODAY=$(date "+%Y-%m-%d")
   if [ -f "$SESSION_DATE_FILE" ]; then
@@ -685,7 +688,27 @@ else
       echo "$NEW_SESSION_ID" > "$SESSION_FILE"
       echo "[session_id] $NEW_SESSION_ID" >> "$LOG_FILE"
     fi
-    COST=$(echo "$RESULT_JSON" | jq -r '.total_cost_usd // 0' 2>/dev/null)
+    # 額は 1 回ぶん（cost_usd）とセッションの累計（cost_session_usd）を分けて書く。
+    # CLI の total_cost_usd は --resume で続けたセッションの累計（claude 2.1.285 で 0.243 → 1.520 → 1.604 と
+    # 増えるのを家 API 側で確かめた・W12）なので、続きの回は同じセッションの前の回の累計を引く。
+    # 前の回の累計が分からない続きの回（この仕組みより前から続くセッションなど）・累計が減った回は ? にする
+    local cost_session prev_sid prev_total
+    cost_session=$(echo "$RESULT_JSON" | jq -r '.total_cost_usd // empty' 2>/dev/null)
+    COST="?"
+    if [[ "$cost_session" =~ ^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$ ]]; then
+      if [ "$run_type" = "resume" ]; then
+        read -r prev_sid prev_total 2>/dev/null < "$SESSION_COST_FILE" || true
+        if [ -n "${prev_sid:-}" ] && [ "$prev_sid" = "${SESSION_ID:-}" ] \
+           && [[ "${prev_total:-}" =~ ^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$ ]]; then
+          COST=$(awk -v a="$cost_session" -v b="$prev_total" 'BEGIN { if (a + 0 >= b + 0) printf "%.6f", a - b; else print "?" }')
+        fi
+      else
+        COST="$cost_session"
+      fi
+      [ -n "$NEW_SESSION_ID" ] && echo "$NEW_SESSION_ID $cost_session" > "$SESSION_COST_FILE"
+    else
+      cost_session="?"
+    fi
     TURNS=$(echo "$RESULT_JSON" | jq -r '.num_turns // 0' 2>/dev/null)
     # 最後の呼び出しで読ませた量（次の回を続きにするかの目安。数だけ残す）
     local context
@@ -695,7 +718,7 @@ else
     else
       context="?"
     fi
-    echo "[usage] type=$run_type turns=$TURNS cost_usd=$COST context=$context" >> "$LOG_FILE"
+    echo "[usage] type=$run_type turns=$TURNS cost_usd=$COST cost_session_usd=$cost_session context=$context" >> "$LOG_FILE"
   }
 
   if [ -f "$SESSION_FILE" ]; then
