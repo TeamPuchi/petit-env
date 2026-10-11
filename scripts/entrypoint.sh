@@ -23,8 +23,18 @@ echo "[entrypoint] $(date -Iseconds) 起動開始 (CHARACTER_IDS=${CHARACTER_IDS
 /opt/petit/scripts/seed-character-files.sh || echo "[entrypoint] 警告: 雛形のファイルを置けなかった" >&2
 
 # --- 1. supercronic (cron) ---
-if [ -f /opt/petit/cron/petit.cron ]; then
-  supercronic /opt/petit/cron/petit.cron >> "$LOG_DIR/supercronic.log" 2>&1 &
+# 日記(今日をふり返る回)の時刻は PETIT_DIARY_AT(HH:MM。既定は petit.cron の 20:30)で変えられる(T4)。supercronic は
+# 予定の欄で環境変数を読まないので、ここで写しを作って diary の行だけ書き換える(元のファイルは変えない)
+CRON_FILE=/opt/petit/cron/petit.cron
+if [ -f "$CRON_FILE" ] && [[ "${PETIT_DIARY_AT:-}" =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]]; then
+  mkdir -p /opt/petit/run
+  sed -E "s|^[0-9]+ [0-9]+ (\* \* \* /opt/petit/scripts/run-for-each-character.sh diary )|$((10#${BASH_REMATCH[2]})) $((10#${BASH_REMATCH[1]})) \1|"     "$CRON_FILE" > /opt/petit/run/petit.cron && CRON_FILE=/opt/petit/run/petit.cron
+  echo "[entrypoint] 日記の回は $PETIT_DIARY_AT に (PETIT_DIARY_AT)"
+elif [ -n "${PETIT_DIARY_AT:-}" ]; then
+  echo "[entrypoint] 警告: PETIT_DIARY_AT の形が HH:MM ではない(${PETIT_DIARY_AT})。petit.cron のまま" >&2
+fi
+if [ -f "$CRON_FILE" ]; then
+  supercronic "$CRON_FILE" >> "$LOG_DIR/supercronic.log" 2>&1 &
   echo "[entrypoint] supercronic 起動 (log: $LOG_DIR/supercronic.log)"
 else
   echo "[entrypoint] 警告: /opt/petit/cron/petit.cron が見つからない。cronはスキップ" >&2

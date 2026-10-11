@@ -5,12 +5,12 @@
 # 書く代わりに、この1本の窓口スクリプトがCHARACTER_IDS環境変数を動的に展開する。
 #
 # Usage:
-#   run-for-each-character.sh <autonomous|desire|diary|memory-sleep>
+#   run-for-each-character.sh <autonomous|desire|diary|sleep|memory-sleep>
 set -u
 
 JOB="${1:-}"
 if [ -z "$JOB" ]; then
-  echo "Usage: $0 <autonomous|desire|diary|memory-sleep>" >&2
+  echo "Usage: $0 <autonomous|desire|diary|sleep|memory-sleep>" >&2
   exit 1
 fi
 
@@ -53,15 +53,24 @@ for c in "${CHARS[@]}"; do
       fi
       ;;
     diary)
-      # ぷちが寝る(akatsuki-petit#133): きのう(JST)の会話と記憶を見返して日記を書き(DIARY#<date>)、
-      # 会話のセッションを切る。書くのは家 API の scripts/write_diary.py(ぷちの SOUL.md の口調で claude を呼ぶ)。
-      # 家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・write_diary.py の無い古い家 API では何もしない。
+      # 夜の「今日をふり返る回」(T4・なぎさん 2026-10-12 D4): ぷち自身が、今日の会話・記憶・体の記録・ノートの変更を
+      # 見返して日記を書く(house の diary_write → DIARY#<date>)。いつもの自律行動と同じ道具・SOUL を持つ回
+      # (autonomous-action.sh --diary)。cron は 20:30(PETIT_DIARY_AT)。会話のセッションはここでは切らない(sleep が切る)。
+      # 家 API の scripts/diary_material.py が無い古い版・家の表が無い環境では、autonomous-action.sh が何もせず抜ける。
+      /opt/petit/scripts/autonomous-action.sh "$CHARACTER_ID" --diary
+      ;;
+    sleep)
+      # 日付の変わり目にぷちが寝る(cron 4:00・記憶の整理 memory-sleep 4:05 の前): 会話のセッションを切る(今までどおり)。
+      # きのう(JST)の日記が無ければ(夜の回で書けなかった日)、その前に今までの形(家 API が材料を並べて fresh session の
+      # ぷちに書かせる)で書く。書くのは家 API の scripts/go_to_sleep.py。go_to_sleep.py の無い古い家 API では
+      # write_diary.py(その版では日記を書いてセッションも切る)。家の表が無い環境では何もしない。
       HOUSE_API_DIR="$REPOS_DIR/m5-petit-app"
-      WRITE_DIARY="$HOUSE_API_DIR/scripts/write_diary.py"
+      GO_TO_SLEEP="$HOUSE_API_DIR/scripts/go_to_sleep.py"
+      [ -f "$GO_TO_SLEEP" ] || GO_TO_SLEEP="$HOUSE_API_DIR/scripts/write_diary.py"
       if [ -z "${PETIT_HOUSE_TABLE:-}" ]; then
-        echo "[run-for-each-character] PETIT_HOUSE_TABLE が未設定。diaryスキップ (character=$CHARACTER_ID)" >&2
-      elif [ ! -f "$WRITE_DIARY" ]; then
-        echo "[run-for-each-character] $WRITE_DIARY が無い。diaryスキップ (character=$CHARACTER_ID)" >&2
+        echo "[run-for-each-character] PETIT_HOUSE_TABLE が未設定。sleepスキップ (character=$CHARACTER_ID)" >&2
+      elif [ ! -f "$GO_TO_SLEEP" ]; then
+        echo "[run-for-each-character] $GO_TO_SLEEP が無い。sleepスキップ (character=$CHARACTER_ID)" >&2
       else
         if [ -x "$HOUSE_API_DIR/.venv/bin/python" ]; then
           HOUSE_PY=("$HOUSE_API_DIR/.venv/bin/python")            # 焼き込み済み
@@ -69,7 +78,7 @@ for c in "${CHARS[@]}"; do
           HOUSE_PY=(uv run --directory "$HOUSE_API_DIR" python)   # dev
         fi
         # 標準出力は1行(日付と結果だけ。日記の本文は出さない)。claude が詰まっても次のキャラへ進めるよう打ち切る
-        echo "[diary] $(date -Iseconds) $CHARACTER_ID: $(timeout 300 "${HOUSE_PY[@]}" "$WRITE_DIARY" "$CHARACTER_ID" 2>&1 | tail -n 1)"
+        echo "[sleep] $(date -Iseconds) $CHARACTER_ID: $(timeout 300 "${HOUSE_PY[@]}" "$GO_TO_SLEEP" "$CHARACTER_ID" 2>&1 | tail -n 1)"
       fi
       ;;
     memory-sleep)

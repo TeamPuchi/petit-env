@@ -19,9 +19,14 @@
 # 欲求システム更新(desire updater): 5分ごと
 */5 * * * * /opt/petit/scripts/run-for-each-character.sh desire >> /data/logs/desire-cron.log 2>&1
 
-# 寝る(日記): 毎晩4:00(コンテナの TZ。既定 Asia/Tokyo)。きのうの会話と記憶を見返して日記を書き、会話のセッションを切る(akatsuki-petit#133)
-# 記憶の整理(memory-sleep)の前に置く。日付は家 API の write_diary.py が JST で決める
-0 4 * * * /opt/petit/scripts/run-for-each-character.sh diary >> /data/logs/diary-cron.log 2>&1
+# 日記(今日をふり返る回): 毎晩 20:30(コンテナの TZ。既定 Asia/Tokyo。T4・なぎさん 2026-10-12「20時以降。澪は22時に寝る」)。
+# ぷち自身が今日の会話・記憶・体の記録を見返して日記を書く(autonomous-action.sh --diary → house の diary_write)。
+# 時刻は環境変数 PETIT_DIARY_AT(HH:MM)で変えられる(entrypoint.sh がこの行を書き換える)。活動時間の最後の枠より後なら何時でもよい
+30 20 * * * /opt/petit/scripts/run-for-each-character.sh diary >> /data/logs/diary-cron.log 2>&1
+
+# 寝る(日付の変わり目): 毎晩4:00。会話のセッションを切る(今までどおり)。夜の回で日記を書けなかった日は、その前に
+# 家 API が今までの形で書く(akatsuki-petit#133 → scripts/go_to_sleep.py)。記憶の整理(memory-sleep)の前に置く
+0 4 * * * /opt/petit/scripts/run-for-each-character.sh sleep >> /data/logs/sleep-cron.log 2>&1
 
 # 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
 # これは仕組みが回す整理。ぷち自身がやる「記憶の整理」「記憶の統合」(週1・日中でもよい)は ROUTINES.md のルーチンで、
