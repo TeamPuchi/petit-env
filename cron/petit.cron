@@ -24,6 +24,8 @@
 0 4 * * * /opt/petit/scripts/run-for-each-character.sh diary >> /data/logs/diary-cron.log 2>&1
 
 # 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
+# これは仕組みが回す整理。ぷち自身がやる「記憶の整理」「記憶の統合」(週1・日中でもよい)は ROUTINES.md のルーチンで、
+# 自律行動の memory の道具(consolidate_memories・link_memories など)を使う(T5・2026-10-12)
 5 4 * * * /opt/petit/scripts/run-for-each-character.sh memory-sleep >> /data/logs/memory-sleep-cron.log 2>&1
 
 # claude CLI の会話記録(~/.claude/projects 等)を消す: 毎日3:17、24時間より古いもの(K21)

@@ -103,7 +103,9 @@ grep -q "record_usage.py --petit mio --source autonomous" "$FAKE_PY_CALLS"; chec
 # 3. 重ならないように（flock）
 if command -v flock > /dev/null 2>&1; then
   reset
-  flock "$LOCK" sleep 3 & HOLDER=$!; sleep 0.5
+  # 前の回の役は 6 秒持つ(2026-10-12 に 3 → 6。WSL が他の作業で混んでいる(load 6)と、下の 2 回の起動だけで 3 秒を越え、
+  # 「待ちきれない」の確かめの前に鍵が空いて claude が呼ばれていた。手を入れていない main でも同じ落ち方をした)
+  flock "$LOCK" sleep 6 & HOLDER=$!; sleep 0.5
   run PETIT_HOUSE_TABLE= "$BASH" "$SCRIPT" mio --date "$DATE"
   [ ! -s "$FAKE_CLAUDE_CALLS" ] && grep -q "まだ動いているので今回は抜ける" <<< "$(log)"
   check "前の回が動いていれば、cron の回は claude を呼ばずに抜ける" $?

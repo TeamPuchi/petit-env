@@ -5,7 +5,7 @@
 #   - check-preload-tools.py: 一覧の名前が実在して印が付いているか（mcp の入った python があるときだけ・偽のサーバーで）
 # - autonomous-action.sh:
 #   - claude に --model（既定 claude-sonnet-5-5・W15）・--tools（使う組み込みの道具だけ）を付ける
-#   - --max-turns は settings.json の値を PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ち。MAX_TURNS を渡せばそれ
+#   - --max-turns は settings.json の値を PETIT_AUTONOMOUS_MAX_TURNS（既定 10。2026-10-12 に 5 → 10）で頭打ち。MAX_TURNS を渡せばそれ
 #   - 前の回の文脈が PETIT_AUTONOMOUS_CONTEXT_MAX（既定 30000）を越えていたら、続きにせず新しいセッション
 #   - 回の終わりに文脈の大きさ（数だけ）を state に残す
 #   - ログの [usage] の額は 1 回ぶん（cost_usd）とセッションの累計（cost_session_usd）を分けて書く（2026-10-11）
@@ -144,7 +144,7 @@ rm -f "$CHAR/state/.heartbeat-session-id" "$CHAR/state/.heartbeat-session-contex
 run
 [ "$(arg_of --model)" = "claude-sonnet-5-5" ]; check "--model は既定 claude-sonnet-5-5（正式名）" $?
 [ "$(arg_of --tools)" = "Read,Write,Edit,Glob,Skill,WebSearch,WebFetch,ToolSearch" ]; check "--tools は使う組み込みの道具だけ" $?
-[ "$(arg_of --max-turns)" = "5" ]; check "settings.json の 20 を 5 で頭打ち" $?
+[ "$(arg_of --max-turns)" = "10" ]; check "settings.json の 20 を既定の 10 で頭打ち（2026-10-12 に 5 → 10）" $?
 [ "$(cat "$CHAR/state/.heartbeat-session-context")" = "8502" ]; check "最後の呼び出しの文脈を残す" $?
 
 run CLAUDE_MODEL=haiku MAX_TURNS=8 PETIT_AUTONOMOUS_TOOLS=
@@ -202,10 +202,11 @@ rm -f "$CHAR/state/.heartbeat-session-id" "$CHAR/state/.heartbeat-session-cost"
 
 # プロンプト（--dry-run で見る）
 OUT=$(env PETIT_HOUSE_TABLE= PATH="$WORK/bin:$PATH" bash "$SCRIPT" mio --dry-run 2>/dev/null)
-echo "$OUT" | grep -q "1回の自律行動でやることは、1つか2つで足りる"; check "プロンプト: 1つか2つで足りる" $?
-echo "$OUT" | grep -q "同じ中身をいくつもの置き場に重ねて書かない"; check "プロンプト: 重ねて書かない" $?
-echo "$OUT" | grep -q "同じ回の中でもう一度 remember しなくてよい"; check "プロンプト: 同じ remember を繰り返さない" $?
-echo "$OUT" | grep -q "気づいたことを日誌のように毎回書き足さなくてよい"; check "プロンプト: TODO を日誌にしない" $?
-echo "$OUT" | grep -q "\[MODEL\] claude-sonnet-5-5 \[MAX_TURNS\] 5"; check "dry-run にモデル・ターンを出す" $?
+# 行動原則（1つか2つで足りる・重ねて書かない・同じ remember を繰り返さない・TODO を日誌にしない）は 2026-10-12（D9・T8）に
+# プロンプトから雛形 SOUL.md の「行動原則」へ移した。プロンプトに残るのは仕組みの事実だけ（deep-layer.test.sh で確かめる）
+! echo "$OUT" | grep -q "1つか2つで足りる"; check "プロンプト: 「1つか2つで足りる」は無い（SOUL の行動原則へ）" $?
+! echo "$OUT" | grep -q "日誌のように"; check "プロンプト: 「TODO を日誌にしない」は無い（SOUL の行動原則へ）" $?
+echo "$OUT" | grep -q "印象に残ったことは、この回のうちに memory の remember で残す"; check "プロンプト: 印象に残ったことはその回のうちに remember（仕組みの事実）" $?
+echo "$OUT" | grep -q "\[MODEL\] claude-sonnet-5-5 \[MAX_TURNS\] 10"; check "dry-run にモデル・ターン（既定 10）を出す" $?
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

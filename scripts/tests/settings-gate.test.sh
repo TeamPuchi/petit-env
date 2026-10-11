@@ -82,11 +82,11 @@ sns_case() {  # 名前 関所の出力 期待(off|on)
     grep -q '^\[SNS\] off' <<<"$log" || ok=false
     grep -q 'mcp__petit-sns' <<<"$log" && ok=false
     grep -q 'SNS' <<<"$(sed -n '/--- PROMPT ---/,/--- ALLOWED_TOOLS ---/p' <<<"$log")" && ok=false
-    grep -q '置き場(記憶・ノート・手紙・TODO のどれか)' <<<"$log" || ok=false
+    grep -q '手紙(mail_\*)・TODO_ACTIVE.md' <<<"$log" || ok=false
   else
     grep -q '^\[SNS\] on' <<<"$log" || ok=false
     grep -q '^mcp__petit-sns__sns_post$' <<<"$log" || ok=false
-    grep -q '置き場(記憶・ノート・手紙・SNS・TODO のどれか)' <<<"$log" || ok=false
+    grep -q '手紙(mail_\*)・SNS・TODO_ACTIVE.md' <<<"$log" || ok=false
   fi
   if $ok; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi
 }
