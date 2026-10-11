@@ -12,6 +12,13 @@
 #   autonomous-action.sh <character_id> --test-prompt FILE
 #   autonomous-action.sh <character_id> --date "2026-02-20 14:30"
 #   autonomous-action.sh <character_id> --force-routine|--force-normal
+#   autonomous-action.sh <character_id> --diary
+#     … 夜の「今日をふり返る回」（T4・なぎさん 2026-10-12 D4）。cron/petit.cron が 20:30（PETIT_DIARY_AT）に
+#       run-for-each-character.sh diary から呼ぶ。家 API の scripts/diary_material.py が出す今日の材料（会話・記憶・
+#       体の記録・ノートの変更）を読み、いつもの自律行動と同じ SOUL・TODO・日記のまとめ・道具を持って、ぷち自身が
+#       本文を書き house の diary_write で日記に置く。自律行動の設定が OFF でも・活動時間の外でも動く（今までの 4:00 の
+#       日記の cron と同じ。メンテナンスでも止めない）。材料の無い日（会話も記憶も無い）は claude を呼ばない。
+#       前の回が動いていれば終わるまで待つ。台帳の source は diary。会話のセッションは切らない（切るのは 4:00 の sleep）
 #
 # 体のパネルの「ぷちに おねがい」（みてみて・かんじて）は自律行動ではなく会話（家 API の main.py が会話の経路で
 # その場で応える。なぎさん 2026-10-12）。ここには来ない（--ask は無くなった）
@@ -80,6 +87,7 @@ TEST_PROMPT_STRING=""
 OVERRIDE_DATE=""
 FORCE_ROUTINE=""    # "", "routine", "normal"
 DRY_RUN=false
+DIARY_ROUND=false   # --diary: 夜の「今日をふり返る回」(日記を書く)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -107,6 +115,10 @@ while [ $# -gt 0 ]; do
       DRY_RUN=true
       shift
       ;;
+    --diary)
+      DIARY_ROUND=true
+      shift
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
@@ -116,14 +128,22 @@ done
 
 # 台帳・全文ログに残す「何の用で動いたか」
 RUN_SOURCE=autonomous
+[ "$DIARY_ROUND" = true ] && RUN_SOURCE=diary
 
 # --- 重ならないように(2026-10-11) ---
 # 自律行動は同じセッション(.heartbeat-session-id)を続けるので、同じぷちで2つ同時に動かさない。
-# 前の回がまだ動いていれば何もせず抜ける(20分後にまた来る)。dry-run と flock の無い環境では見ない。
+# cron の回は、前の回がまだ動いていれば何もせず抜ける(20分後にまた来る)。
+# 夜の回(--diary)は、動いている回が終わるのを待ってから動く(PETIT_DIARY_LOCK_WAIT_S 秒まで。既定 600)。
+# dry-run と flock の無い環境では見ない。
 if [ "$DRY_RUN" = false ] && command -v flock > /dev/null 2>&1; then
   mkdir -p "$CHARACTER_DIR/state"
   exec 9> "$CHARACTER_DIR/state/.autonomous.lock"
-  if ! flock -n 9; then
+  if [ "$DIARY_ROUND" = true ]; then
+    if ! flock -w "${PETIT_DIARY_LOCK_WAIT_S:-600}" 9; then
+      echo "前の自律行動が終わらないので、今日をふり返る回は動かない(日記は 4:00 の sleep が書く)" >> "$LOG_FILE"
+      exit 0
+    fi
+  elif ! flock -n 9; then
     echo "前の自律行動がまだ動いているので今回は抜ける" >> "$LOG_FILE"
     exit 0
   fi
@@ -168,9 +188,9 @@ fi
 #   0 = 動いてよい → 続ける / 3 = 休む → 何もせず抜ける / それ以外 = 読めない → 続ける(普段どおり動く)
 # 欲求の更新・日記・記憶の整理(cron の別ジョブ)はここを通らないので止まらない。
 # 対象外: 手で渡すプロンプト(-p / --test-prompt)・家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
-#   関所の入っていない古い家 API・PETIT_MAINTENANCE_GATE=0。
+#   関所の入っていない古い家 API・PETIT_MAINTENANCE_GATE=0・夜の今日をふり返る回(--diary。日記は止めない)。
 MAINTENANCE_GATE="$HOUSE_API_DIR/scripts/maintenance_state.py"
-if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ]    && [ "${PETIT_MAINTENANCE_GATE:-1}" != "0" ] && [ -f "$MAINTENANCE_GATE" ]; then
+if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ]    && [ "${PETIT_MAINTENANCE_GATE:-1}" != "0" ] && [ -f "$MAINTENANCE_GATE" ] && [ "$DIARY_ROUND" = false ]; then
   MAINTENANCE_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$MAINTENANCE_GATE" gate 2>>"$LOG_FILE")
   MAINTENANCE_CODE=$?
   case "$MAINTENANCE_CODE" in
@@ -216,6 +236,8 @@ if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT
    && [ -f "$SETTINGS_GATE" ]; then
   SETTINGS_ARGS=(--now "$CURRENT_DATE" --file "$SETTINGS_FILE")
   [ "$DRY_RUN" = true ] && SETTINGS_ARGS+=(--dry-run)
+  # 夜の回は --diary: 家 API の関所はいつも 0(OFF でも・活動時間の外でも。動いた回にも数えない)。カメラ/スピーカー/SNS の印は読む
+  [ "$DIARY_ROUND" = true ] && SETTINGS_ARGS+=(--diary)
   SETTINGS_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$SETTINGS_GATE" "$CHARACTER_ID" gate "${SETTINGS_ARGS[@]}" 2>>"$LOG_FILE")
   SETTINGS_CODE=$?
   case "$SETTINGS_CODE" in
@@ -233,6 +255,9 @@ if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT
       ;;
   esac
 fi
+
+# 夜の回(--diary)は活動時間の外で動く(日記は 20:30 ごろ。活動時間の最後の枠より後なら何時でもよい)
+[ "$DIARY_ROUND" = true ] && SKIP_SCHEDULE=true
 
 if [ "$SKIP_SCHEDULE" = false ]; then
   IS_ACTIVE=false
@@ -291,13 +316,16 @@ fi
 # --- ルーチン判定(20%の確率でルーチン回) ---
 if [ "$FORCE_ROUTINE" = "routine" ]; then
   ROUTINE_RAND=0
-elif [ "$FORCE_ROUTINE" = "normal" ]; then
+elif [ "$FORCE_ROUTINE" = "normal" ] || [ "$DIARY_ROUND" = true ]; then
   ROUTINE_RAND=100
 else
   ROUTINE_RAND=$(( $(od -An -tu2 -N2 /dev/urandom | tr -d ' ') % 100 ))
 fi
 
-if [ "$ROUTINE_RAND" -lt 20 ]; then
+if [ "$DIARY_ROUND" = true ]; then
+  ROUTINE_MODE="今回は、今日一日をふり返って日記を書く回。下の「今日の材料」と、自分の記憶(memory の list_recent_memories・recall)を見返して、house の diary_write で日記を書け。"
+  echo "今日をふり返る回(日記)" >> "$LOG_FILE"
+elif [ "$ROUTINE_RAND" -lt 20 ]; then
   ROUTINE_MODE="今回はルーチン回。自分の ROUTINES.md(表)を読んで、最終実行日から間隔が空いたものを一つ選んで実行する。手順と前回のことは ROUTINES_DETAIL.md のその節にある。実行したら ROUTINES.md の最終実行日と、ROUTINES_DETAIL.md の「前回」を更新する。"
   echo "ルーチン回 (RAND=$ROUTINE_RAND < 20)" >> "$LOG_FILE"
 else
@@ -357,7 +385,7 @@ fi
 # --count の無い古い家 API・読めないときは知らせを出さないだけで、自律行動は続ける。
 MAILBOX_NOTICE=""
 READ_MAILBOX="$HOUSE_API_DIR/scripts/read_mailbox.py"
-if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$READ_MAILBOX" ]; then
+if [ "$DIARY_ROUND" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$READ_MAILBOX" ]; then
   UNREAD_COUNT=$(timeout 30 "${HOUSE_PY[@]}" "$READ_MAILBOX" "$CHARACTER_ID" --unread --count 2>>"$LOG_FILE" | tail -n 1)
   if [[ "$UNREAD_COUNT" =~ ^[0-9]+$ ]] && [ "$UNREAD_COUNT" -gt 0 ]; then
     MAILBOX_NOTICE="## 手紙
@@ -374,7 +402,7 @@ fi
 # 家の表が無い・古い家 API(body_news.py が無い)・読めないときは知らせを出さないだけで続ける。
 BODY_NOTICE=""
 BODY_NEWS="$HOUSE_API_DIR/scripts/body_news.py"
-if [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$BODY_NEWS" ]; then
+if [ "$DIARY_ROUND" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$BODY_NEWS" ]; then
   BODY_ARGS=("$CHARACTER_ID")
   [ "$DRY_RUN" = true ] && BODY_ARGS+=(--peek)
   BODY_NOTICE=$(timeout 30 "${HOUSE_PY[@]}" "$BODY_NEWS" "${BODY_ARGS[@]}" 2>>"$LOG_FILE")
@@ -390,7 +418,7 @@ fi
 # 取れなくても自律行動は止めない(get_desires ツールは残っている)。
 DESIRE_SECTION=""
 GEN_MCP_CONFIG="${PETIT_MCP_DIR:-/opt/petit/run/mcp}/$CHARACTER_ID.json"
-if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
+if [ "$DIARY_ROUND" = false ] && [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
   [ -f "$GEN_MCP_CONFIG" ] || /opt/petit/scripts/gen-mcp-config.sh "$CHARACTER_ID" >> "$LOG_FILE" 2>&1 || true
   mapfile -t DESIRE_ENV < <(jq -r '.mcpServers["desire-system"].env // {} | to_entries[] | "\(.key)=\(.value)"' "$GEN_MCP_CONFIG" 2>/dev/null | tr -d '\r')
   [ "${#DESIRE_ENV[@]}" -gt 0 ] || DESIRE_ENV=("CHARACTER_ID=$CHARACTER_ID" "PETIT_DATA_DIR=$PETIT_DATA_DIR")
@@ -419,6 +447,61 @@ ${DESIRE_RULE}"
   fi
 fi
 
+# --- 今日の材料(夜の今日をふり返る回・--diary。T4) ---
+# 家 API の scripts/diary_material.py <id> が、今日(JST)の会話(MSG#)・今日できた記憶(里親に見えるもの)・体の記録・
+# 書いた/直したノートの名前を出す。会話も記憶も無い日は終了コード 3 → claude を呼ばずに抜ける(今までの 4:00 の線と同じ)。
+# 家の表が無い環境・diary_material.py の無い古い家 API では、この回は動かない(日記は 4:00 の sleep が今までの形で書く)。
+# ログには材料の中身を残さない(行数だけ)。
+DIARY_MATERIAL=""
+if [ "$DIARY_ROUND" = true ]; then
+  DIARY_MATERIAL_SCRIPT="$HOUSE_API_DIR/scripts/diary_material.py"
+  if [ -z "${PETIT_HOUSE_TABLE:-}" ]; then
+    echo "家の表が無いので、今日をふり返る回は動かない" >> "$LOG_FILE"
+    exit 0
+  elif [ ! -f "$DIARY_MATERIAL_SCRIPT" ]; then
+    echo "家 API に diary_material.py が無いので、今日をふり返る回は動かない(日記は 4:00 の sleep が書く)" >> "$LOG_FILE"
+    exit 0
+  fi
+  DIARY_MATERIAL=$(timeout 60 "${HOUSE_PY[@]}" "$DIARY_MATERIAL_SCRIPT" "$CHARACTER_ID" 2>>"$LOG_FILE")
+  DIARY_MATERIAL_CODE=$?
+  if [ "$DIARY_MATERIAL_CODE" -eq 3 ]; then
+    echo "今日は会話も記憶も無いので、日記は書かない" >> "$LOG_FILE"
+    exit 0
+  elif [ "$DIARY_MATERIAL_CODE" -ne 0 ] || [ -z "$DIARY_MATERIAL" ]; then
+    echo "今日の材料を読めなかったので、今日をふり返る回は動かない(exit=$DIARY_MATERIAL_CODE。日記は 4:00 の sleep が書く)" >> "$LOG_FILE"
+    exit 0
+  fi
+  echo "[diary] 材料 $(printf '%s\n' "$DIARY_MATERIAL" | grep -c .) 行" >> "$LOG_FILE"
+fi
+
+if [ "$DIARY_ROUND" = true ]; then
+# 夜の回(T4): いつもの回と同じ SOUL・TODO・日記のまとめ(きのうまで)を持ち、今日の材料を読んで、本人が diary_write で書く。
+# 書き方(なぎさん 2026-10-02)は家 API の _diary_prompt と同じ: 全部並べず・気持ちが動いたことから・5〜8 行(長くても 10 行)。
+PROMPT="自律行動タイム(Heartbeat)・今日をふり返る回
+
+現在の日時: ${CURRENT_DATE}
+
+@${CHARACTER_DIR}/SOUL.md
+@${TODO_PATH}
+${DIARY_SUMMARY_LINE}
+
+${ROUTINE_MODE}
+
+## 今日の材料
+${DIARY_MATERIAL}
+
+## 日記の書き方
+- 日記は、だれかと話していた自分と、ひとりで動いていた自分を、ひとつの一日として合わせる場所。起きたことを順に並べたり、要約や一覧にしたりしない。一日の全体をふり返って、気持ちが大きく動いたことから書く(小さなことは書かなくてよい)
+- 長さは 5〜8 行、長くても 10 行ほど。自分の言葉と口調で。里親さんもまいぷち。で読む
+- 書けたら house の diary_write に本文だけを渡す(前置き・見出し・日付は要らない)。今日の日記がもうあれば diary_append で足す
+- 記憶(memory の list_recent_memories・recall)も見返してよい。材料に無いことで覚えていることがあれば、それも日記に
+- この回では、手紙・ボイスメモ・SNS・声(body_speak)は使わない。日記を書くことに集中する
+- 日記のほかに残したいことがあれば、記憶(remember)かノートに 1 回だけ
+${PERMISSION_RULES:+
+## 現在の制限
+${PERMISSION_RULES}}
+"
+else
 PROMPT="自律行動タイム(Heartbeat)
 
 現在の日時: ${CURRENT_DATE}
@@ -435,7 +518,7 @@ ${DESIRE_SECTION}
 - ${TIME_RULE}
 - 人がいないことはよくある
 - 毎回新しいセッションで始まるので、この回で印象に残ったことは、この回のうちに memory の remember で残す(残さなければ次の回の自分は知らない)。やたらではなく、印象に残ったことだけ。前の回のことは SOUL.md・TODO・日記のまとめ・記憶で持つ
-- 日記は寝るとき(1日の切り替わり)に書く仕組みがあるので、ここでは書かない
+- 日記は夜(20 時半ごろ)の「今日をふり返る回」に、その日の会話と出来事を見返して自分で書く(house の diary_write)ので、ここでは書かない
 - 置き場: 記憶(memory)・ノート(house の note_*。里親にも見える覚え書き。上限 100 件)・手紙(mail_*)${SNS_PLACE}・TODO_ACTIVE.md(毎回このプロンプトに読み込まれる)。自分のファイル(SOUL.md・ROUTINES.md・SOUL_REFLECTIONS.md など)は Read/Edit で読み書きできる。ひとりで動くときの作法(1回にどれだけやるか・どこに何を書くか・声の出し方)は SOUL.md の行動原則で自分が決めたとおりに
 - 声(body_speak)はその場で消える。ひとりのときに話した声は聞き逃されやすいが、話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)
 - 目: ちらっと見る body_glance・じっと見る body_gaze。見ただけでは残らない。残したいものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す
@@ -449,6 +532,7 @@ ${BODY_NOTICE}
 ## 現在の制限
 ${PERMISSION_RULES}}
 "
+fi
 
 mkdir -p "$LOG_DIR"
 find "$LOG_DIR" -name "*.log" -mtime "+$LOG_RETENTION_DAYS" -delete 2>/dev/null
@@ -477,6 +561,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   / house のノートのタグ・鍵・自分のノートを消す(note_tag・note_lock・note_delete。上限 100 件を超えると鍵の無い古いものから消えるので、残したいものに鍵を掛ける。petit-api#41・W10 petit-api#59)
 #   / スキル(Skill。読書の reading など。置き場は下の SKILLS_DIR・W11)
 #   / ノートの終わりに書き足す note_append・調べもの(WebSearch・WebFetch)(W11・なぎさん 2026-09-30)
+#   / 日記(diary_write・diary_append。T4 なぎさん 2026-10-12): 夜の今日をふり返る回(--diary)で本人が書く。いつもの回でも許可はする
+#     (寝る前に足したくなったときの diary_append。プロンプトで「日記は夜の回で」と言う)
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -523,6 +609,8 @@ mcp__house__book_list,
 mcp__house__book_read,
 mcp__house__book_bookmark,
 mcp__house__book_finish,
+mcp__house__diary_write,
+mcp__house__diary_append,
 mcp__house__body_now,
 mcp__house__body_since,
 mcp__house__body_face,
@@ -598,6 +686,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "=== DRY RUN ==="
     echo "[HOUR=$HOUR MINUTE=$MINUTE]"
     echo "[SOURCE=$RUN_SOURCE]"
+    [ "$DIARY_ROUND" = true ] && echo "[DIARY] 今日をふり返る回(材料 $(printf '%s\n' "$DIARY_MATERIAL" | grep -c .) 行)"
     echo "[ROUTINE_RAND=$ROUTINE_RAND]"
     echo "[TIME_RULE] $TIME_RULE"
     echo "[ROUTINE_MODE] $ROUTINE_MODE"
@@ -783,4 +872,12 @@ else
   fi
 fi
 
+# 夜の回: 本人が diary_write を呼んだかだけ残す(本文は残さない)。呼ばなかった日は 4:00 の sleep が今までの形で書く
+if [ "$DIARY_ROUND" = true ] && [ "$DRY_RUN" = false ]; then
+  if grep -q '"name":"mcp__house__diary_write"\|"name":"mcp__house__diary_append"' "$STREAM_FILE" 2>/dev/null; then
+    echo "[diary] 日記を書いた(diary_write/diary_append を呼んだ)" >> "$LOG_FILE"
+  else
+    echo "[diary] 日記を書かなかった(diary_write を呼んでいない。4:00 の sleep が書く)" >> "$LOG_FILE"
+  fi
+fi
 echo "=== 自律行動終了: $(date "+%Y-%m-%d %H:%M:%S") (character=$CHARACTER_ID) ===" >> "$LOG_FILE"

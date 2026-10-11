@@ -45,7 +45,7 @@ check "memory・petit-sns はそのまま" $?
 rm -rf "$PETIT_DATA_DIR/logs"
 PETIT_HOUSE_TABLE= bash "$HERE/autonomous-action.sh" mio --dry-run > /dev/null 2>&1
 log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
-for t in note_list note_read note_write note_append note_tag note_lock note_delete mail_read mail_send relation_list relation_update relation_clear book_list book_read book_bookmark book_finish; do
+for t in note_list note_read note_write note_append note_tag note_lock note_delete mail_read mail_send relation_list relation_update relation_clear book_list book_read book_bookmark book_finish diary_write diary_append; do
   grep -qx "mcp__house__$t" <<<"$log"
   check "allowedTools に mcp__house__$t" $?
 done
@@ -63,6 +63,8 @@ check "キャラ固有の設定に m5-mcp が無ければ m5-mcp の道具は許
 # 「声で伝えたいと思った言葉があるときだけ」は行動原則なので雛形 SOUL.md へ移した（2026-10-12・T8）。プロンプトに残るのは仕組みの事実
 grep -q "声(body_speak)はその場で消える" <<<"$log" && ! grep -q "声で伝えたいと思った言葉があるときだけ" <<<"$log"
 check "声の仕組み（その場で消える・ボイスメモに残る）だけプロンプトに書く" $?
+grep -q "日記は夜(20 時半ごろ)の「今日をふり返る回」に" <<<"$log" && grep -q "ここでは書かない" <<<"$log"
+check "いつもの回のプロンプトに「日記は夜の回で自分で書く。ここでは書かない」" $?
 
 # 5. ローカル版（キャラ固有の設定に m5-mcp がある）では m5-mcp の道具も許可する
 echo '{"mcpServers": {"m5-mcp": {"command": "true"}}}' > "$PETIT_DATA_DIR/characters/mio/config/autonomous-mcp.json"
