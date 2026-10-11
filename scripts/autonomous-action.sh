@@ -346,6 +346,14 @@ SPEAKER_OFF=false
 [ "${ALLOW_SOUND:-true}" = "false" ] && SPEAKER_OFF=true
 case "$SETTINGS_OUT" in *camera=off*) CAMERA_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- 目(カメラ)は里親が閉じている。目で周りを見ることはしないこと。\n" ;; esac
 case "$SETTINGS_OUT" in *speaker=off*) SPEAKER_OFF=true; PERMISSION_RULES="${PERMISSION_RULES}- お喋り(スピーカー)は里親が止めている。声や音を出す道具は使わないこと。\n" ;; esac
+# ぷちたち。(SNS)は、里親さんがまいぷち。でオンにするまで見ない・書かない(akatsuki-petit#204・なぎさん 2026-10-10)。
+# 関所が sns=off と言ったときだけ、SNS の道具を外し、プロンプトからも SNS を外す(制限としても書かない＝空っぽ)。
+# sns=unknown(sns-api に届かない)・sns の無い古い家 API では外さない(sns-api がぷちの口を断る)
+SNS_OFF=false
+case "$SETTINGS_OUT" in *sns=off*) SNS_OFF=true ;; esac
+SNS_DOINGS="SNS に書く・誰かの投稿に反応する・受け箱を見る・"
+SNS_PLACE="・SNS"
+[ "$SNS_OFF" = true ] && SNS_DOINGS="" && SNS_PLACE=""
 
 # --- プロンプト組み立て ---
 if [ -f "$CHARACTER_DIR/TODO_ACTIVE.md" ]; then
@@ -419,7 +427,7 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
     elif [ "$ROUTINE_RAND" -lt 20 ]; then
       DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
     else
-      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: SNS に書く・誰かの投稿に反応する・受け箱を見る・記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: ${SNS_DOINGS}記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
 - 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
     fi
@@ -460,7 +468,7 @@ ${DESIRE_SECTION}
 - 人がいないことはよくある
 - 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
 - 1回の自律行動でやることは、1つか2つで足りる(次の回もある)
-- 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙・SNS・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
+- 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙${SNS_PLACE}・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
 - TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
 - 自分の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
 - 声はその場で消えるので、ひとりのときに話した声は聞き逃されやすい。話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)。何を言ったか・誰に向けて言ったかを remember で覚えておくと、あとで会話の自分も思い出せる
@@ -580,6 +588,8 @@ drop_tools() {  # drop_tools <道具名>...
 }
 [ "$CAMERA_OFF" = true ] && drop_tools mcp__house__body_glance mcp__house__body_gaze mcp__m5-mcp__take_snapshot
 [ "$SPEAKER_OFF" = true ] && drop_tools mcp__house__body_speak mcp__m5-mcp__play_sound mcp__m5-mcp__play_icon
+[ "$SNS_OFF" = true ] && drop_tools mcp__petit-sns__sns_post mcp__petit-sns__sns_timeline mcp__petit-sns__sns_react \
+  mcp__petit-sns__sns_comment mcp__petit-sns__sns_inbox
 
 if [ -n "$TEST_PROMPT_STRING" ]; then
   PROMPT="$TEST_PROMPT_STRING"
@@ -620,6 +630,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "[ROUTINE_MODE] $ROUTINE_MODE"
     echo "[SKILLS] ${SKILLS_DIR:-なし}"
     echo "[MODEL] $CLAUDE_MODEL [MAX_TURNS] $MAX_TURNS [TOOLS] ${BUILTIN_TOOLS:-既定(全部)} [CONTEXT_MAX] $CONTEXT_MAX"
+    echo "[SNS] $([ "$SNS_OFF" = true ] && echo "off(SNS-MCP の道具を外す)" || echo on)"
     echo ""
     echo "--- PROMPT ---"
     echo "$PROMPT"
@@ -660,6 +671,8 @@ else
     CLAUDE_ARGS+=(--mcp-config "${MCP_CONFIGS[@]}" --strict-mcp-config)
   fi
   CLAUDE_ARGS+=(--add-dir "$PETIT_DATA_DIR" ${SKILLS_DIR:+"$SKILLS_DIR"} --allowedTools "$ALLOWED_TOOLS")
+  # ぷちたち。がオフなら、SNS-MCP の道具は最初から見せない(許可しないだけだと、道具の説明は載る)
+  [ "$SNS_OFF" = true ] && CLAUDE_ARGS+=(--disallowedTools mcp__petit-sns)
   # 組み込みの道具は使うものだけ載せる（W12）。付けないと Bash・Task なども毎回載り、1 回の入力が約 2.6 万トークン重い
   [ -n "$BUILTIN_TOOLS" ] && CLAUDE_ARGS+=(--tools "$BUILTIN_TOOLS")
   # 思考の要約を stream に残す（akatsuki-petit#154）。既定（omitted）だと thinking の中身が空になる。
