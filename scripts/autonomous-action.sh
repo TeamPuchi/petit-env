@@ -12,9 +12,9 @@
 #   autonomous-action.sh <character_id> --test-prompt FILE
 #   autonomous-action.sh <character_id> --date "2026-02-20 14:30"
 #   autonomous-action.sh <character_id> --force-routine|--force-normal
-#   autonomous-action.sh <character_id> --ask "さっき〇〇が体のパネルで『みてみて』とお願いした（…）"
-#     … 体のパネルの「ぷちに おねがい」で、家 API がすぐに起こす回（2026-10-11）。活動時間の外でも、
-#       自律行動の設定が OFF でも動く（頻度の間引きも見ない。止めるのはチュートリアル・メンテナンスだけ）。前の回が動いていれば終わるまで待つ。台帳の source は ask
+#
+# 体のパネルの「ぷちに おねがい」（みてみて・かんじて）は自律行動ではなく会話（家 API の main.py が会話の経路で
+# その場で応える。なぎさん 2026-10-12）。ここには来ない（--ask は無くなった）
 set -u
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
@@ -80,7 +80,6 @@ TEST_PROMPT_STRING=""
 OVERRIDE_DATE=""
 FORCE_ROUTINE=""    # "", "routine", "normal"
 DRY_RUN=false
-ASK_WORDS=""        # --ask: お願いされて起こされた回のお願いの言葉(家 API が渡す)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -108,10 +107,6 @@ while [ $# -gt 0 ]; do
       DRY_RUN=true
       shift
       ;;
-    --ask)
-      ASK_WORDS="$2"
-      shift 2
-      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
@@ -119,24 +114,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 台帳・全文ログに残す「何の用で動いたか」。お願いで起こされた回は ask(費用を分けて見られるように)
+# 台帳・全文ログに残す「何の用で動いたか」
 RUN_SOURCE=autonomous
-[ -n "$ASK_WORDS" ] && RUN_SOURCE=ask
 
 # --- 重ならないように(2026-10-11) ---
 # 自律行動は同じセッション(.heartbeat-session-id)を続けるので、同じぷちで2つ同時に動かさない。
-# cron の回は、前の回(お願いで起こされた回など)がまだ動いていれば何もせず抜ける(20分後にまた来る)。
-# お願いの回(--ask)は、動いている回が終わるのを待ってから動く(PETIT_ASK_LOCK_WAIT_S 秒まで。既定 600)。
-# dry-run と flock の無い環境では見ない。
+# 前の回がまだ動いていれば何もせず抜ける(20分後にまた来る)。dry-run と flock の無い環境では見ない。
 if [ "$DRY_RUN" = false ] && command -v flock > /dev/null 2>&1; then
   mkdir -p "$CHARACTER_DIR/state"
   exec 9> "$CHARACTER_DIR/state/.autonomous.lock"
-  if [ -n "$ASK_WORDS" ]; then
-    if ! flock -w "${PETIT_ASK_LOCK_WAIT_S:-600}" 9; then
-      echo "前の自律行動が終わらないので、お願いの回は動かない(お願いは体の記録に残っている)" >> "$LOG_FILE"
-      exit 0
-    fi
-  elif ! flock -n 9; then
+  if ! flock -n 9; then
     echo "前の自律行動がまだ動いているので今回は抜ける" >> "$LOG_FILE"
     exit 0
   fi
@@ -223,15 +210,12 @@ fi
 # 判定は家 API の scripts/settings_state.py <id> gate(まだまいぷち。で決めていない項目は settings.json を読む):
 #   0 = 動く → 下の settings.json の判定を飛ばす / 3 = 今回は動かない / それ以外 = 読めない → 今までどおり settings.json で決める
 # 関所は読んだ印を表に残す(まいぷち。の「ぷちに届いたか」の表示に使う)。PETIT_SETTINGS_GATE=0 で止められる。
-# お願いの回(--ask)は --reason ask を渡す: 家 API の関所はいつも 0 を返す(自律行動が OFF でも・頻度では間引かず・
-#   活動時間の外でも動く。動いた回にも数えない。なぎさん 2026-10-11)。カメラ/スピーカー/SNS の印はいつもどおり読む。--reason を知らない古い家 API・読めないときも、活動時間では止めない。
 SETTINGS_GATE="$HOUSE_API_DIR/scripts/settings_state.py"
 SETTINGS_OUT=""
 if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_SETTINGS_GATE:-1}" != "0" ] \
    && [ -f "$SETTINGS_GATE" ]; then
   SETTINGS_ARGS=(--now "$CURRENT_DATE" --file "$SETTINGS_FILE")
   [ "$DRY_RUN" = true ] && SETTINGS_ARGS+=(--dry-run)
-  [ -n "$ASK_WORDS" ] && SETTINGS_ARGS+=(--reason ask)
   SETTINGS_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$SETTINGS_GATE" "$CHARACTER_ID" gate "${SETTINGS_ARGS[@]}" 2>>"$LOG_FILE")
   SETTINGS_CODE=$?
   case "$SETTINGS_CODE" in
@@ -249,9 +233,6 @@ if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT
       ;;
   esac
 fi
-
-# お願いの回は活動時間の外でも動く(会話と同じように応える。回数の上限は家 API の PETIT_ASK_WAKE_DAILY_MAX)
-[ -n "$ASK_WORDS" ] && SKIP_SCHEDULE=true
 
 if [ "$SKIP_SCHEDULE" = false ]; then
   IS_ACTIVE=false
@@ -302,8 +283,6 @@ fi
 # 声は house の body_speak(機体のスピーカー)。ローカル版の say(m5-mcp)はクラウドに無い(2026-09-29)。
 if [ "$HOUR" -ge 24 ] || [ "$HOUR" -lt 7 ]; then
   TIME_RULE="現在は深夜帯。声(body_speak)は絶対に使わないこと。静かに観察のみ。"
-  # お願いされた回は、深夜でも応えてよい(声は出さず、顔や目で)
-  [ -n "$ASK_WORDS" ] && TIME_RULE="現在は深夜帯。声(body_speak)は絶対に使わないこと。お願いに応えるなら、顔(body_face)や目で静かに。"
 else
   # D10（2026-10-12）: 「里親が部屋にいれば積極的に使う」。それまでは「人がいそうなときだけ」
   TIME_RULE="${USER_NAME}が部屋にいれば、声(body_speak)を積極的に使ってよい。いなさそうなら、伝えたいことがあるときだけ(いるかどうかは体の知らせ・body_now で、近くに何かがいる・触られた などから分かる)。"
@@ -312,16 +291,13 @@ fi
 # --- ルーチン判定(20%の確率でルーチン回) ---
 if [ "$FORCE_ROUTINE" = "routine" ]; then
   ROUTINE_RAND=0
-elif [ "$FORCE_ROUTINE" = "normal" ] || [ -n "$ASK_WORDS" ]; then
+elif [ "$FORCE_ROUTINE" = "normal" ]; then
   ROUTINE_RAND=100
 else
   ROUTINE_RAND=$(( $(od -An -tu2 -N2 /dev/urandom | tr -d ' ') % 100 ))
 fi
 
-if [ -n "$ASK_WORDS" ]; then
-  ROUTINE_MODE="今回は、お願いされて目が覚めた回。下の「お願い」を読んで、どう応えるかを自分で決めよ。"
-  echo "お願いの回" >> "$LOG_FILE"
-elif [ "$ROUTINE_RAND" -lt 20 ]; then
+if [ "$ROUTINE_RAND" -lt 20 ]; then
   ROUTINE_MODE="今回はルーチン回。自分の ROUTINES.md(表)を読んで、最終実行日から間隔が空いたものを一つ選んで実行する。手順と前回のことは ROUTINES_DETAIL.md のその節にある。実行したら ROUTINES.md の最終実行日と、ROUTINES_DETAIL.md の「前回」を更新する。"
   echo "ルーチン回 (RAND=$ROUTINE_RAND < 20)" >> "$LOG_FILE"
 else
@@ -434,26 +410,13 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
     DESIRE_RULE="- これは自分の欲求で、自分のもの。当たり前に従う。level が高い欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: ${SNS_DOINGS}記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。どう満たすかは今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
 - 値が体感と違えば、shape_desire で定義(増え方・減り方も)を自分で直す。欲求は自分で見つけて、書いて、従うもの。get_desires でいつでも見直せる。"
-    [ -n "$ASK_WORDS" ] && DESIRE_RULE="${DESIRE_RULE}
-- 今回はお願いで起こされた回。お願いと欲求のどちらをどう扱うかも自分で決める。"
-    [ "$ROUTINE_RAND" -lt 20 ] && [ -z "$ASK_WORDS" ] && DESIRE_RULE="${DESIRE_RULE}
+    [ "$ROUTINE_RAND" -lt 20 ] && DESIRE_RULE="${DESIRE_RULE}
 - 今回はルーチン回。ルーチンと欲求のどちらをどう扱うかも自分で決める。"
     DESIRE_SECTION="## いまの気分(欲求)
 ${DESIRE_STATUS}
 
 ${DESIRE_RULE}"
   fi
-fi
-
-# --- お願い(体のパネルの「ぷちに おねがい」。2026-10-11) ---
-# 家 API がお願いを受けて、すぐにこの回を起こした。見る(目)か感じる(体の感覚)かは、ぷちが自分で決める
-# (家 API は先に撮らない)。お願いの言葉は家 API が体の記録の言葉から作る(だれ・何を)。ログには中身を残さない
-ASK_NOTICE=""
-if [ -n "$ASK_WORDS" ]; then
-  ASK_NOTICE="## お願い
-${ASK_WORDS}。それで目が覚めた。
-- 応えるかどうか・どう応えるかは自分で決めてよい。見てほしいなら自分の目で見る(ちらっと body_glance・じっと body_gaze)。感じてほしいなら body_now を fresh で呼ぶと、いまの体の感じを確かめられる
-- そばに頼んだ人がいるはず。顔(body_face)や声(body_speak)で応えてもよい"
 fi
 
 PROMPT="自律行動タイム(Heartbeat)
@@ -465,9 +428,7 @@ PROMPT="自律行動タイム(Heartbeat)
 ${DIARY_SUMMARY_LINE}
 
 ${ROUTINE_MODE}
-${ASK_NOTICE:+
-${ASK_NOTICE}
-}${DESIRE_SECTION:+
+${DESIRE_SECTION:+
 ${DESIRE_SECTION}
 }
 ## 仕組みのこと

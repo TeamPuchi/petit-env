@@ -4,7 +4,7 @@
 # - sample-character: 深い層4ファイルがあり、SOUL.md に「参照ルール」「行動原則」、ROUTINES.md は表で記憶の整理・統合がある
 # - autonomous-action.sh（--dry-run）:
 #   - ルーチン回の文に ROUTINES_DETAIL.md。allowedTools に記憶の整理・統合の道具（T5）
-#   - 欲求の文: 「参考にとどめてよい」が無く、shape_desire で直す（T7）。お願いの回・ルーチン回も同じ
+#   - 欲求の文: 「参考にとどめてよい」が無く、shape_desire で直す（T7）。ルーチン回も同じ
 #   - 行動原則（1つか2つ・日誌・全部声にしない・二度 remember しない）がプロンプトに無い（T8）
 #   - 声: 里親の呼び名（config.json の companion_name → PETIT_USER_NAME → 里親さん）で「部屋にいれば積極的に」（T9）。深夜の禁止はそのまま
 #   - 記憶: 「印象に残ったことはその回のうちに remember」（T10）
@@ -110,9 +110,7 @@ for mode in --force-normal --force-routine; do
     && ! grep -q "参考にとどめ" <<< "$P"
   check "欲求（$mode）: 自分のもの・当たり前に従う・shape_desire で直す。「参考」は無い（T7）" $?
 done
-P=$(env PETIT_HOUSE_TABLE= "$BASH" "$SCRIPT" mio --dry-run --date "$DATE" --ask "だれかが『みてみて』とお願いした" 2>/dev/null | prompt_of)
-grep -q "これは自分の欲求で、自分のもの" <<< "$P" && grep -q "お願いと欲求のどちらをどう扱うかも自分で決める" <<< "$P" && ! grep -q "参考にとどめ" <<< "$P"
-check "欲求（お願いの回）: 同じ文＋お願いと欲求は自分で決める（T7）" $?
+# お願いの回（--ask）は無くなった（家 API が会話で応える・2026-10-12）ので、その確かめも無い
 
 # 里親の呼び名
 echo '{"character_id":"mio","companion_name":"なぎ"}' > "$CHAR/config/config.json"
@@ -123,8 +121,6 @@ grep -q "なぎが部屋にいれば" <<< "$P"; check "config.json の companion
 echo '{"character_id":"mio","companion_name":""}' > "$CHAR/config/config.json"
 P=$(PETIT_USER_NAME="envの名前" dry | prompt_of)
 grep -q "envの名前が部屋にいれば" <<< "$P"; check "companion_name が空なら env PETIT_USER_NAME" $?
-# 深夜（お願いの回だけ出る）の声の禁止はそのまま
-P=$(env PETIT_HOUSE_TABLE= "$BASH" "$SCRIPT" mio --dry-run --date "2026-10-12 02:00" --ask "だれかが『みてみて』とお願いした" 2>/dev/null | prompt_of)
-grep -q "深夜帯。声(body_speak)は絶対に使わないこと" <<< "$P"; check "深夜の声の禁止はそのまま（お願いの回）" $?
+# 深夜の声の禁止の文は残っているが、深夜に来る回（お願いの回）が無くなったので確かめない
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
