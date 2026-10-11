@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 体のパネルの「ぷちに おねがい」で家 API がすぐに起こす回（autonomous-action.sh --ask・2026-10-11）を確かめる。
-# - 設定の関所に --reason ask を渡す（ON/OFF だけを見る）。cron の回には渡さない
+# - 設定の関所に --reason ask を渡す（家 API の関所は自律行動が OFF でも通す）。cron の回には渡さない
 # - 活動時間の外でも動く（関所が読めない・家の表が無いときの settings.json の判定でも）。深夜は声を出さずに応える
 # - プロンプトに「## お願い」とお願いの言葉。ルーチン回にはならない
 # - 台帳（record_usage.py）・全文ログ（archive_stream.py）の source は ask。cron の回は autonomous のまま
@@ -28,7 +28,7 @@ cat > "$API/.venv/bin/python" <<'PY'
 #!/usr/bin/env bash
 echo "$*" >> "$FAKE_PY_CALLS"
 case "$1" in
-  *settings_state.py) echo "settings: run (fake) camera=on speaker=on" ;;
+  *settings_state.py) echo "${FAKE_GATE_OUT:-settings: run (fake) camera=on speaker=on}" ;;
   *tutorial_state.py) echo "tutorial: done" ;;
 esac
 exit 0
@@ -70,6 +70,12 @@ reset
 OUT=$(env PETIT_HOUSE_TABLE=t PATH="$WORK/bin:$PATH" "$BASH" "$SCRIPT" mio --dry-run --date "$DATE" 2>/dev/null)
 ! grep -q -- "--reason" "$FAKE_PY_CALLS" && ! grep -q "## お願い" <<< "$OUT" && grep -q "\[SOURCE=autonomous\]" <<< "$OUT"
 check "cron の回は --reason を渡さず、お願いも出さない" $?
+
+# 1a. 自律行動が OFF でも（家 API の関所は --reason ask なら通して、理由に (autonomous off) を付ける）お願いの回は動く
+reset
+OUT=$(env PETIT_HOUSE_TABLE=t FAKE_GATE_OUT="settings: run (ask active weekday 18:00-24:00 (autonomous off)) camera=on speaker=on"   PATH="$WORK/bin:$PATH" "$BASH" "$SCRIPT" mio --dry-run --date "$DATE" --ask "$ASK" 2>/dev/null)
+grep -q "## お願い" <<< "$OUT" && grep -q "(autonomous off)" <<< "$(log)"
+check "自律行動が OFF でもお願いの回は動く" $?
 
 # 1b. 活動時間の外（settings.json は 10〜11 時だけ・関所が無い／読めない）でも、お願いの回は動く
 echo '{"active_hours": [[10, 11]]}' > "$CHAR/config/settings.json"

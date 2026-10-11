@@ -13,8 +13,8 @@
 #   autonomous-action.sh <character_id> --date "2026-02-20 14:30"
 #   autonomous-action.sh <character_id> --force-routine|--force-normal
 #   autonomous-action.sh <character_id> --ask "さっき〇〇が体のパネルで『みてみて』とお願いした（…）"
-#     … 体のパネルの「ぷちに おねがい」で、家 API がすぐに起こす回（2026-10-11）。活動時間の外でも動く
-#       （頻度の間引きも見ない。見るのは ON/OFF だけ）。前の回が動いていれば終わるまで待つ。台帳の source は ask
+#     … 体のパネルの「ぷちに おねがい」で、家 API がすぐに起こす回（2026-10-11）。活動時間の外でも、
+#       自律行動の設定が OFF でも動く（頻度の間引きも見ない。止めるのはチュートリアル・メンテナンスだけ）。前の回が動いていれば終わるまで待つ。台帳の source は ask
 set -u
 
 PETIT_DATA_DIR="${PETIT_DATA_DIR:-/data}"
@@ -217,8 +217,8 @@ fi
 # 判定は家 API の scripts/settings_state.py <id> gate(まだまいぷち。で決めていない項目は settings.json を読む):
 #   0 = 動く → 下の settings.json の判定を飛ばす / 3 = 今回は動かない / それ以外 = 読めない → 今までどおり settings.json で決める
 # 関所は読んだ印を表に残す(まいぷち。の「ぷちに届いたか」の表示に使う)。PETIT_SETTINGS_GATE=0 で止められる。
-# お願いの回(--ask)は --reason ask を渡す: ON/OFF だけを見る(頻度では間引かず、活動時間の外でも動く。動いた回にも
-#   数えない。なぎさん 2026-10-11)。--reason を知らない古い家 API・読めないときも、活動時間では止めない。
+# お願いの回(--ask)は --reason ask を渡す: 家 API の関所はいつも 0 を返す(自律行動が OFF でも・頻度では間引かず・
+#   活動時間の外でも動く。動いた回にも数えない。なぎさん 2026-10-11)。カメラ/スピーカー/SNS の印はいつもどおり読む。--reason を知らない古い家 API・読めないときも、活動時間では止めない。
 SETTINGS_GATE="$HOUSE_API_DIR/scripts/settings_state.py"
 SETTINGS_OUT=""
 if [ "$SKIP_SCHEDULE" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_SETTINGS_GATE:-1}" != "0" ] \
