@@ -75,8 +75,13 @@ OUT=$(PETIT_SAMPLE_CHARACTER_DIR="$WORK/none" CHARACTER_IDS=mio bash "$SEED" 2>&
 # 3. 自律行動のプロンプト（dry-run）
 DATE="2026-10-12 19:20"
 dry() { env PETIT_HOUSE_TABLE= "$BASH" "$SCRIPT" mio --dry-run --date "$DATE" "$@" 2>/dev/null; }
-prompt_of() { sed -n '/--- PROMPT ---/,/--- ALLOWED_TOOLS ---/p'; }
-tools_of() { sed -n '/--- ALLOWED_TOOLS ---/,$p'; }
+# dry-run はその回のログ（名前は秒単位 YYYYMMDD_HHMMSS.log）に書き足してから cat する。同じ秒に 2 回 dry-run を
+# 回すと 1 つのログに 2 回ぶんが並び、--- PROMPT --- が 2 つ出る（本番では 20 分に 1 回なので起きない）。
+# 最後の 1 回ぶんだけを見る
+last_run() { awk '/^=== DRY RUN ===$/{buf=""} {buf=buf $0 "
+"} END{printf "%s", buf}'; }
+prompt_of() { last_run | sed -n '/--- PROMPT ---/,/--- ALLOWED_TOOLS ---/p'; }
+tools_of() { last_run | sed -n '/--- ALLOWED_TOOLS ---/,$p'; }
 
 OUT=$(dry --force-routine)
 grep -q "手順と前回のことは ROUTINES_DETAIL.md" <<< "$OUT" && grep -q "ROUTINES_DETAIL.md の「前回」を更新" <<< "$OUT"
