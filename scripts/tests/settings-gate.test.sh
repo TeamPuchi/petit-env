@@ -71,6 +71,30 @@ run_case "家の表が無い環境は関所なし"             skip "非アク�
 run_case "カメラを閉じていれば制限に足す"         run  "目(カメラ)は里親が閉じている"    PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 FAKE_SETTINGS_OUT="settings: run (active) camera=off speaker=on"
 run_case "お喋りを止めていれば制限に足す"         run  "お喋り(スピーカー)は里親が止めている" PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 FAKE_SETTINGS_OUT="settings: run (active) camera=on speaker=off"
 
+# ぷちたち。は里親さんがオンにするまで見ない(akatsuki-petit#204)。sns=off なら SNS の道具もプロンプトの SNS も無い
+sns_case() {  # 名前 関所の出力 期待(off|on)
+  rm -rf "$PETIT_DATA_DIR/logs"
+  env PETIT_HOUSE_TABLE=t FAKE_SETTINGS_CODE=0 FAKE_SETTINGS_OUT="$2" bash "$SCRIPT" mio --dry-run --date "$DATE" > /dev/null 2>&1
+  local log ok=true
+  log="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
+  grep -q "DRY RUN" <<<"$log" || ok=false
+  if [ "$3" = off ]; then
+    grep -q '^\[SNS\] off' <<<"$log" || ok=false
+    grep -q 'mcp__petit-sns' <<<"$log" && ok=false
+    grep -q 'SNS' <<<"$(sed -n '/--- PROMPT ---/,/--- ALLOWED_TOOLS ---/p' <<<"$log")" && ok=false
+    grep -q '置き場(記憶・ノート・手紙・TODO のどれか)' <<<"$log" || ok=false
+  else
+    grep -q '^\[SNS\] on' <<<"$log" || ok=false
+    grep -q '^mcp__petit-sns__sns_post$' <<<"$log" || ok=false
+    grep -q '置き場(記憶・ノート・手紙・SNS・TODO のどれか)' <<<"$log" || ok=false
+  fi
+  if $ok; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi
+}
+sns_case "ぷちたち。がオフなら SNS を外す"            "settings: run (active) camera=on speaker=on sns=off"     off
+sns_case "ぷちたち。がオンなら SNS はそのまま"        "settings: run (active) camera=on speaker=on sns=on"      on
+sns_case "確かめられない(unknown)ときは外さない"     "settings: run (active) camera=on speaker=on sns=unknown" on
+sns_case "sns の無い古い家 API では外さない"         "settings: run (active) camera=on speaker=on"             on
+
 # settings.json で決めるとき(関所が無い・読めない): 時間帯の外は毎時0分でも、何度引いても動かない(くじは無い)
 for d in "2026-09-29 10:00" "2026-09-29 15:00" "2026-09-29 03:00" "2026-10-03 09:00"; do
   for i in 1 2 3; do
