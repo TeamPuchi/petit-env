@@ -36,6 +36,7 @@ scripts/
   install-components.sh        # build 中に venv を作る(Dockerfile.core から)
   gen-mcp-config.sh            # CHARACTER_IDS ごとに記憶 MCP・SNS-MCP の設定を作る(起動時)
   gen-skills.sh                # CHARACTER_IDS ごとにスキルの置き場を作る(起動時・自律行動の毎回)
+  seed-character-files.sh      # characters/<id>/ に無いファイル(深い層など)を sample-character から置く(起動時)
   autonomous-action.sh         # 自律行動スクリプト(コンテナ内汎用版)
   run-for-each-character.sh    # CHARACTER_IDSを展開して各ジョブを実行する窓口
 release/
@@ -94,6 +95,23 @@ docker compose exec core claude login
 `sample-character/` をコピーして、`.env` の `PETIT_DATA_DIR` に対応するホスト側ディレクトリの
 `characters/<id>/` に配置してください。詳しくは [sample-character/README.md](./sample-character/README.md)。
 
+> **ぷちのファイルは「毎回読む層」と「必要なときだけ読む深い層」に分ける**(brain-plan T2・2026-10-12。PetitOnes と同じ)。
+> 毎回プロンプトに読み込まれるのは `SOUL.md`・`TODO_ACTIVE.md`(と `diary_summary.md` があればそれ)。`ROUTINES.md` は表だけ(名前・間隔・最終実行日)で、
+> ルーチン回(20%)にぷちが自分で読む。深い層は `ROUTINES_DETAIL.md`(ルーチンごとの手順と「前回(日付): …」)・`SOUL_REFLECTIONS.md`(発見の詳細)・
+> `REFLECTION_INDEX.md`(その索引。見出し＋1行＋日付)・`TODO_ARCHIVE.md`(終わった TODO の移し先)で、`@` で読み込まず、ぷちが必要なときだけ
+> Read/Edit(会話では家 API の `self_file_*`)で読み書きする。雛形 `SOUL.md` に「参照ルール」(SOUL_REFLECTIONS を読む条件)と「行動原則(自分で決める)」の章。
+> 深い層の4ファイルは「必要になったら分ける」のではなく**最初から置く**: 新しいぷちは雛形から。**すでに動いているぷち(澪)には、コンテナの起動時に
+> `scripts/entrypoint.sh` → `scripts/seed-character-files.sh` が `/data/characters/<id>/` に無いファイルだけ `/opt/petit/sample-character/`(イメージに焼き込み)から置く**
+> (あるファイルは中身を見ずに触らない。`SOUL.md`・`TODO_ACTIVE.md`・`ROUTINES.md` も無ければ置く)。確かめ方: `bash scripts/tests/deep-layer.test.sh`。
+>
+> **自律行動のプロンプトには仕組みの事実だけ**(D9・T8)。「1回に1つか2つで足りる」「TODO を日誌にしない」「全部声にしない」「同じ回で二度 remember しない」などの作法(行動原則)は
+> プロンプトから外し、雛形 `SOUL.md` の「行動原則」に例として移した(ぷちが自分で決めて書く)。欲求は「参考」ではなく自分のもの(D8・T7):
+> 「当たり前に従う。値が体感と違えば shape_desire で定義(増え方・減り方も)を自分で直す」。声は「里親が部屋にいれば積極的に使ってよい。いなさそうなら伝えたいことがあるときだけ」(D10・T9。
+> 里親の呼び名はキャラの `config/config.json` の `companion_name` → env `PETIT_USER_NAME` → 「里親さん」)。深夜の声の禁止は cron の回(と、お願いで起こされた回)だけでそのまま。
+> 記憶は「印象に残ったことは、その回のうちに remember で残す(毎回新しいセッションなので、残さなければ次の回は知らない)」の1行(D7・T10)。
+> 記憶の整理・統合はぷち自身がやれるよう、自律行動の allowedTools に memory の `consolidate_memories`・`link_memories`・`get_working_memory`・`refresh_working_memory`・`recall_with_associations`
+> を足し、雛形 `ROUTINES.md` に「記憶の整理(週1)」「記憶の統合(週1)」(D5・T5。日中にやってもよい。cron 4:05 の memory-sleep はそのまま)。
+
 ## コンテナで動くもの
 
 | # | コンポーネント | 動き方 |
@@ -119,7 +137,7 @@ docker compose exec core claude login
 > 欲求 MCP(`desire-system`・petit-desire)も同じく自動生成する(2026-09-26)。`PETIT_HOUSE_TABLE` があれば家の表の `STATE#DESIRES`(家 API の `GET /petits/{pid}/mood` が読む行)、無ければ `/data/characters/<id>/data/desires.json`。5分ごとの更新(`run-for-each-character.sh desire`)と、自律行動のプロンプトに差し込む「いまの気分」(`desire-status`)も同じ env を使う。欲求の定義はキャラの `config/desire_config.json`、無ければ petit-desire の既定(仮置き)。
 > **ぷちのスキル**(W11・2026-09-29)。Claude Code の Skills(`<置き場>/.claude/skills/<名前>/SKILL.md`。やり方の手順書)を、自律行動と会話の両方の claude に `--add-dir` で渡す。共通のスキルは petit-env の `skills/`(イメージの `/opt/petit/skills/`。いまは読書の `reading`)、ぷちだけのスキルは `/data/characters/<id>/skills/<名前>/SKILL.md`(同じ名前なら共通を置き換え・空の SKILL.md なら使わない。`sample-character/skills/README.md`)。`scripts/gen-skills.sh` が起動時と自律行動の毎回に `/opt/petit/run/skills/<id>/.claude/skills/` へまとめ、会話は家 API(petit-api main.py の `PETIT_SKILLS_DIR`)が同じ置き場を渡す。スキルを開く `Skill` と、調べもの用の `WebSearch`・`WebFetch`(なぎさん 2026-09-30)は自律行動の許可に入れてある。確かめ方: `bash scripts/tests/skills.test.sh`。
 
-> **頭脳の原価を下げる**(W12・2026-09-30)。自律行動の claude には `--model`(`CLAUDE_MODEL`、既定 `claude-sonnet-5-5`＝Sonnet 5.5 の正式名。W15。W12 は別名 sonnet)・`--tools`(組み込みの道具は使うものだけ。`PETIT_AUTONOMOUS_TOOLS`。付けないと Bash・Task なども毎回載り、1回の入力が約2.6万トークン重い)を付ける。`--max-turns` は settings.json の `max_turns`(既定20)を `PETIT_AUTONOMOUS_MAX_TURNS`(既定5・0で頭打ちしない)で頭打ちにする(`MAX_TURNS` を渡せばそれ)。前の回の終わりの文脈(最後の呼び出しで読ませたトークン数。`state/.heartbeat-session-context` に数だけ残す)が `PETIT_AUTONOMOUS_CONTEXT_MAX`(既定30000・0で上限なし)を越えていたら、続きにせず新しいセッションで始める(元の仕組みは1日じゅう同じセッションを続けていた)。MCP の道具の説明は、多いと claude が後から探す(ToolSearch。1回に1ターン)。よく使うものは最初から載せる: 一覧は `scripts/preload-tools.txt` の1か所(`mcp__<サーバー>__<道具>`。選び方の数字もそこに。2026-10-03)。`gen-mcp-config.sh` がサーバーごとに分けて各 MCP サーバーの env `PETIT_PRELOAD_TOOLS` に入れ、家 API の house_mcp.py・petit-memory・petit-sns・petit-desire がその道具に `_meta` の `anthropic/alwaysLoad` を付ける(コンテナの env `PETIT_PRELOAD_TOOLS` で一時的に差し替え)。名前が実在して印が付いたかは本番で `/opt/petit/repos/m5-petit-app/.venv/bin/python /opt/petit/scripts/check-preload-tools.py /opt/petit/run/mcp/<id>.json --sizes`(claude は呼ばない。道具ごとの説明の重さも出る)。サーバーごと全部載せるのは `PETIT_MCP_ALWAYS_LOAD`(既定は空)。自律行動のプロンプトに「TODO を日誌にしない」「同じ remember を繰り返さない」「1つの出来事は1か所に」。会話・日記のモデル(`PETIT_CHAT_MODEL`・`PETIT_DIARY_MODEL`)と会話の `--tools`(`PETIT_CHAT_TOOLS`)は家 API が読む。ログの `[usage]` 行の額は、1回ぶん(`cost_usd`)とセッションの累計(`cost_session_usd`)を分けて書く(2026-10-11)。CLI の `total_cost_usd` は `--resume` で続けたセッションの累計なので、`state/.heartbeat-session-cost` に残した前の回の累計を引く。前の回の累計が分からない続きの回・累計が減った回・`result` 行の無い回は `?`(コスト台帳 `usage/YYYY-MM.jsonl` の `cost_usd` と同じ考え方)。確かめ方: `bash scripts/tests/brain-cost.test.sh`。
+> **頭脳の原価を下げる**(W12・2026-09-30)。自律行動の claude には `--model`(`CLAUDE_MODEL`、既定 `claude-sonnet-5-5`＝Sonnet 5.5 の正式名。W15。W12 は別名 sonnet)・`--tools`(組み込みの道具は使うものだけ。`PETIT_AUTONOMOUS_TOOLS`。付けないと Bash・Task なども毎回載り、1回の入力が約2.6万トークン重い)を付ける。`--max-turns` は settings.json の `max_turns`(既定20)を `PETIT_AUTONOMOUS_MAX_TURNS`(既定10・0で頭打ちしない。W12 では 5 だったが、2026-10-12 に D6「調べて、考えて、認めて、また調べる」の咀嚼が入るよう 10 に)で頭打ちにする(`MAX_TURNS` を渡せばそれ)。前の回の終わりの文脈(最後の呼び出しで読ませたトークン数。`state/.heartbeat-session-context` に数だけ残す)が `PETIT_AUTONOMOUS_CONTEXT_MAX`(既定30000・0で上限なし)を越えていたら、続きにせず新しいセッションで始める(元の仕組みは1日じゅう同じセッションを続けていた)。MCP の道具の説明は、多いと claude が後から探す(ToolSearch。1回に1ターン)。よく使うものは最初から載せる: 一覧は `scripts/preload-tools.txt` の1か所(`mcp__<サーバー>__<道具>`。選び方の数字もそこに。2026-10-03)。`gen-mcp-config.sh` がサーバーごとに分けて各 MCP サーバーの env `PETIT_PRELOAD_TOOLS` に入れ、家 API の house_mcp.py・petit-memory・petit-sns・petit-desire がその道具に `_meta` の `anthropic/alwaysLoad` を付ける(コンテナの env `PETIT_PRELOAD_TOOLS` で一時的に差し替え)。名前が実在して印が付いたかは本番で `/opt/petit/repos/m5-petit-app/.venv/bin/python /opt/petit/scripts/check-preload-tools.py /opt/petit/run/mcp/<id>.json --sizes`(claude は呼ばない。道具ごとの説明の重さも出る)。サーバーごと全部載せるのは `PETIT_MCP_ALWAYS_LOAD`(既定は空)。W12 で自律行動のプロンプトに入れた「TODO を日誌にしない」「同じ remember を繰り返さない」「1つの出来事は1か所に」は、2026-10-12 に雛形 SOUL.md の「行動原則」へ移した(上の「キャラクターを作る」)。会話・日記のモデル(`PETIT_CHAT_MODEL`・`PETIT_DIARY_MODEL`)と会話の `--tools`(`PETIT_CHAT_TOOLS`)は家 API が読む。ログの `[usage]` 行の額は、1回ぶん(`cost_usd`)とセッションの累計(`cost_session_usd`)を分けて書く(2026-10-11)。CLI の `total_cost_usd` は `--resume` で続けたセッションの累計なので、`state/.heartbeat-session-cost` に残した前の回の累計を引く。前の回の累計が分からない続きの回・累計が減った回・`result` 行の無い回は `?`(コスト台帳 `usage/YYYY-MM.jsonl` の `cost_usd` と同じ考え方)。確かめ方: `bash scripts/tests/brain-cost.test.sh`。
 
 > それ以外の MCP サーバー(機体など)はキャラ固有の `config/autonomous-mcp.json` に足す(`memory`・`petit-sns`・`desire-system` の名前は使わない)。`scripts/autonomous-action.sh` は両方を `--mcp-config` に重ねて渡す。足したら `allowedTools` にも `mcp__<名前>__*` を追加する。
 

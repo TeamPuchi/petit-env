@@ -60,8 +60,9 @@ for t in mcp__house__body_wait_touch mcp__house__body_glance mcp__house__body_sp
 done
 ! grep -q "^mcp__m5-mcp__" <<<"$log"
 check "キャラ固有の設定に m5-mcp が無ければ m5-mcp の道具は許可しない" $?
-grep -q "声(body_speak)は、声で伝えたいと思った言葉があるときだけ" <<<"$log"
-check "声はぷちが選んだ言葉だけ、とプロンプトに書く" $?
+# 「声で伝えたいと思った言葉があるときだけ」は行動原則なので雛形 SOUL.md へ移した（2026-10-12・T8）。プロンプトに残るのは仕組みの事実
+grep -q "声(body_speak)はその場で消える" <<<"$log" && ! grep -q "声で伝えたいと思った言葉があるときだけ" <<<"$log"
+check "声の仕組み（その場で消える・ボイスメモに残る）だけプロンプトに書く" $?
 
 # 5. ローカル版（キャラ固有の設定に m5-mcp がある）では m5-mcp の道具も許可する
 echo '{"mcpServers": {"m5-mcp": {"command": "true"}}}' > "$PETIT_DATA_DIR/characters/mio/config/autonomous-mcp.json"

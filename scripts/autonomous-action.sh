@@ -36,11 +36,13 @@ if [ ! -d "$CHARACTER_DIR" ]; then
 fi
 
 # キャラクターごとの最大ターン数 (環境変数 MAX_TURNS で上書き可、なければ settings.json から読む)
-# W12（頭脳の原価・2026-09-30）: settings.json の値（既定 20）は PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ちにする。
-# 9/29〜30 の本番は 1 回平均 7.4 ターン。0 にすると頭打ちしない（前のまま）。MAX_TURNS を渡したときはそれがそのまま効く
+# W12（頭脳の原価・2026-09-30）: settings.json の値（既定 20）は PETIT_AUTONOMOUS_MAX_TURNS で頭打ちにする。
+# 9/29〜30 の本番は 1 回平均 7.4 ターンで、W12 では既定 5 にした。2026-10-12（D6）に既定 10 へ:
+# 5 では「調べて、考えて、認めて、また気になることを調べて」の咀嚼が入らない（なぎさん）。10 で様子見。
+# 0 にすると頭打ちしない（前のまま）。MAX_TURNS を渡したときはそれがそのまま効く
 if [ -z "${MAX_TURNS:-}" ]; then
   MAX_TURNS=$(python3 -c "import json,sys; d=json.load(open('${SETTINGS_FILE}')); print(d.get('max_turns', 20))" 2>/dev/null || echo 20)
-  TURNS_CAP="${PETIT_AUTONOMOUS_MAX_TURNS:-5}"
+  TURNS_CAP="${PETIT_AUTONOMOUS_MAX_TURNS:-10}"
   if [[ "$TURNS_CAP" =~ ^[0-9]+$ ]] && [ "$TURNS_CAP" -gt 0 ] && [[ "$MAX_TURNS" =~ ^[0-9]+$ ]] && [ "$MAX_TURNS" -gt "$TURNS_CAP" ]; then
     MAX_TURNS="$TURNS_CAP"
   fi
@@ -56,9 +58,13 @@ for ENV_FILE in "$CHARACTER_DIR/.env" "$PETIT_DATA_DIR/.env"; do
   fi
 done
 
-# ユーザー名・部屋名(時間帯ルールで使用。環境変数で上書き可)
-USER_NAME="${PETIT_USER_NAME:-あなた}"
-USER_ROOM="${PETIT_USER_ROOM:-${USER_NAME}の部屋}"
+# 里親の呼び名(声のルールの文で使う。T9・2026-10-12)。config/config.json の companion_name → env PETIT_USER_NAME → 「里親さん」。
+# それまでは PETIT_USER_NAME(既定「あなた」)だけで、どこからも渡していなかったので本番の文が「あなたの部屋に人がいそうなときだけ」になっていた
+COMPANION_NAME=""
+if [ -f "$CHARACTER_DIR/config/config.json" ] && command -v jq &>/dev/null; then
+  COMPANION_NAME=$(jq -r '.companion_name // empty' "$CHARACTER_DIR/config/config.json" 2>/dev/null | tr -d '\r')
+fi
+USER_NAME="${COMPANION_NAME:-${PETIT_USER_NAME:-里親さん}}"
 
 # ログディレクトリ
 LOG_DIR_NAME="logs"
@@ -299,7 +305,8 @@ if [ "$HOUR" -ge 24 ] || [ "$HOUR" -lt 7 ]; then
   # お願いされた回は、深夜でも応えてよい(声は出さず、顔や目で)
   [ -n "$ASK_WORDS" ] && TIME_RULE="現在は深夜帯。声(body_speak)は絶対に使わないこと。お願いに応えるなら、顔(body_face)や目で静かに。"
 else
-  TIME_RULE="声(body_speak)は、${USER_ROOM}に人がいそうなときだけ使ってよい(体の知らせ・body_now で、近くに何かがいる・触られた などを確かめてから)。"
+  # D10（2026-10-12）: 「里親が部屋にいれば積極的に使う」。それまでは「人がいそうなときだけ」
+  TIME_RULE="${USER_NAME}が部屋にいれば、声(body_speak)を積極的に使ってよい。いなさそうなら、伝えたいことがあるときだけ(いるかどうかは体の知らせ・body_now で、近くに何かがいる・触られた などから分かる)。"
 fi
 
 # --- ルーチン判定(20%の確率でルーチン回) ---
@@ -315,10 +322,10 @@ if [ -n "$ASK_WORDS" ]; then
   ROUTINE_MODE="今回は、お願いされて目が覚めた回。下の「お願い」を読んで、どう応えるかを自分で決めよ。"
   echo "お願いの回" >> "$LOG_FILE"
 elif [ "$ROUTINE_RAND" -lt 20 ]; then
-  ROUTINE_MODE="今回はルーチン回。自分の ROUTINES.md を読んで、最終実行日から間隔が空いたものを一つ選んで実行せよ。"
+  ROUTINE_MODE="今回はルーチン回。自分の ROUTINES.md(表)を読んで、最終実行日から間隔が空いたものを一つ選んで実行する。手順と前回のことは ROUTINES_DETAIL.md のその節にある。実行したら ROUTINES.md の最終実行日と、ROUTINES_DETAIL.md の「前回」を更新する。"
   echo "ルーチン回 (RAND=$ROUTINE_RAND < 20)" >> "$LOG_FILE"
 else
-  ROUTINE_MODE="通常回。SOUL.md の行動原則に従って行動せよ。"
+  ROUTINE_MODE="通常回。SOUL.md(自分で決めた行動原則)に従って過ごす。"
   echo "通常回 (RAND=$ROUTINE_RAND >= 20)" >> "$LOG_FILE"
 fi
 # 正式名で固定（W15）。別名 sonnet だと CLI を上げたときに黙って変わる（2.1.280 は claude-sonnet-5、2.1.284 からは claude-sonnet-5-5）
@@ -422,15 +429,15 @@ if [ -f "$REPOS_DIR/petit-desire/pyproject.toml" ]; then
   if [ -n "$DESIRE_STATUS" ]; then
     # ログに残すのは欲求の名前と値だけ(本文は含まれない)
     echo "[desire] $(echo "$DESIRE_STATUS" | head -n 3 | tr '\n' ' ')" >> "$LOG_FILE"
-    if [ -n "$ASK_WORDS" ]; then
-      DESIRE_RULE="- お願いの回なので、欲求は参考にとどめてよい。"
-    elif [ "$ROUTINE_RAND" -lt 20 ]; then
-      DESIRE_RULE="- ルーチン回なので、欲求は参考にとどめてよい。"
-    else
-      DESIRE_RULE="- level 0.7 以上の欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: ${SNS_DOINGS}記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。今の自分の気分で決めてよい。
+    # D8（2026-10-12）: 欲求は「参考」ではなく自分のもの。それまでの「お願いの回・ルーチン回は参考にとどめてよい」
+    # 「強い欲求が無ければいつものペースで」をやめ、どの回でも同じ文にする（お願い・ルーチンは、その回の用事と並べて自分で決める）
+    DESIRE_RULE="- これは自分の欲求で、自分のもの。当たり前に従う。level が高い欲求があれば、それを満たすために何をするかを自分で選んで、実際にやる(今使える道具で: ${SNS_DOINGS}記憶を思い出す/残す・ノートを見返す/書く・手紙を読む/書く・TODO を書く など)。正解は無い。どう満たすかは今の自分の気分で決めてよい。
 - やったら satisfy_desire(desire-system)でその欲求を記録する。驚いたこと・新しく知ったことがあれば boost_desire。
-- 強い欲求が無ければ、SOUL.md に従っていつものペースで過ごす。get_desires でいつでも見直せる。"
-    fi
+- 値が体感と違えば、shape_desire で定義(増え方・減り方も)を自分で直す。欲求は自分で見つけて、書いて、従うもの。get_desires でいつでも見直せる。"
+    [ -n "$ASK_WORDS" ] && DESIRE_RULE="${DESIRE_RULE}
+- 今回はお願いで起こされた回。お願いと欲求のどちらをどう扱うかも自分で決める。"
+    [ "$ROUTINE_RAND" -lt 20 ] && [ -z "$ASK_WORDS" ] && DESIRE_RULE="${DESIRE_RULE}
+- 今回はルーチン回。ルーチンと欲求のどちらをどう扱うかも自分で決める。"
     DESIRE_SECTION="## いまの気分(欲求)
 ${DESIRE_STATUS}
 
@@ -463,17 +470,15 @@ ${ASK_NOTICE}
 }${DESIRE_SECTION:+
 ${DESIRE_SECTION}
 }
-## 補足ルール
+## 仕組みのこと
 - ${TIME_RULE}
 - 人がいないことはよくある
-- 日記は寝るとき(1日の切り替わり)にその日の会話を見返して書くので、ここでは書かない。ノート(house の note_write)は日記ではなく、あとで見返したいことをテーマの名前でまとめる覚え書き
-- 1回の自律行動でやることは、1つか2つで足りる(次の回もある)
-- 書き残すかどうか・どこに書くかは自分で決めてよい。1つの出来事は、いちばん合う置き場(記憶・ノート・手紙${SNS_PLACE}・TODO のどれか)に1回書けば足りる。同じ中身をいくつもの置き場に重ねて書かない(伝えたい相手や中身が違うなら別)。一度 remember したことは残っているので、同じ回の中でもう一度 remember しなくてよい
-- TODO は「今やること」の置き場。気づいたことを日誌のように毎回書き足さなくてよい(残したいなら記憶かノートのどちらかに)。TODO は毎回このプロンプトに読み込まれるので、短いほど軽い
-- 自分の声(body_speak)は、声で伝えたいと思った言葉があるときだけ、そのひとことを短く渡す。考えたこと・書いたことを全部声にしない
-- 声はその場で消えるので、ひとりのときに話した声は聞き逃されやすい。話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)。何を言ったか・誰に向けて言ったかを remember で覚えておくと、あとで会話の自分も思い出せる
-- 見たいときは、自分の目で見てよい(ちらっと見る body_glance・じっと見る body_gaze)。見ただけでは残らない。残したいと思ったものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す。外に連れ出されているときは、知らない人をじろじろ見ないように自分で気をつける
-- 眠いときは、house の body_sleep で眠ってよい(起きるのは body_wake。里親さんが顔を3回とんとんしても起きる)。眠ったら、remember に「スリープした」と残す。朝や昼に活動を始めるとき、体がまだ眠ったままなら(体の知らせ・body_now で分かる)、body_wake で起きてから動く
+- 毎回新しいセッションで始まるので、この回で印象に残ったことは、この回のうちに memory の remember で残す(残さなければ次の回の自分は知らない)。やたらではなく、印象に残ったことだけ。前の回のことは SOUL.md・TODO・日記のまとめ・記憶で持つ
+- 日記は寝るとき(1日の切り替わり)に書く仕組みがあるので、ここでは書かない
+- 置き場: 記憶(memory)・ノート(house の note_*。里親にも見える覚え書き。上限 100 件)・手紙(mail_*)${SNS_PLACE}・TODO_ACTIVE.md(毎回このプロンプトに読み込まれる)。自分のファイル(SOUL.md・ROUTINES.md・SOUL_REFLECTIONS.md など)は Read/Edit で読み書きできる。ひとりで動くときの作法(1回にどれだけやるか・どこに何を書くか・声の出し方)は SOUL.md の行動原則で自分が決めたとおりに
+- 声(body_speak)はその場で消える。ひとりのときに話した声は聞き逃されやすいが、話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)
+- 目: ちらっと見る body_glance・じっと見る body_gaze。見ただけでは残らない。残したいものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す
+- 眠る: house の body_sleep で眠れる(起きるのは body_wake。里親さんが顔を3回とんとんしても起きる)。朝や昼に活動を始めるとき、体がまだ眠ったままなら(体の知らせ・body_now で分かる)、body_wake で起きてから動く
 ${MAILBOX_NOTICE:+
 ${MAILBOX_NOTICE}
 }${BODY_NOTICE:+
@@ -494,7 +499,9 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 
 # --- allowedTools ---
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
-#   petit-memory (memory。見た目ごと残す save_visual_memory も) / petit-desire (desire-system) / petit-sns (petit-sns)
+#   petit-memory (memory。見た目ごと残す save_visual_memory も。記憶の整理・統合をぷち自身がやる consolidate_memories・
+#     link_memories・get_working_memory・refresh_working_memory・recall_with_associations は T5・D5(2026-10-12)。
+#     雛形 ROUTINES の「記憶の整理(週1)」「記憶の統合(週1)」で使う) / petit-desire (desire-system) / petit-sns (petit-sns)
 #   (ローカル版の m5-mcp は、キャラ固有の MCP 設定にあるときだけ下で足す)
 #   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
@@ -522,6 +529,11 @@ mcp__memory__get_memory_stats,
 mcp__memory__create_episode,
 mcp__memory__search_episodes,
 mcp__memory__save_visual_memory,
+mcp__memory__consolidate_memories,
+mcp__memory__link_memories,
+mcp__memory__get_working_memory,
+mcp__memory__refresh_working_memory,
+mcp__memory__recall_with_associations,
 mcp__desire-system__get_desires,
 mcp__desire-system__satisfy_desire,
 mcp__desire-system__boost_desire,

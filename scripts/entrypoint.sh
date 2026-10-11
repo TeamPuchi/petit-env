@@ -18,6 +18,9 @@ echo "[entrypoint] $(date -Iseconds) 起動開始 (CHARACTER_IDS=${CHARACTER_IDS
 /opt/petit/scripts/gen-mcp-config.sh || echo "[entrypoint] 警告: MCP 設定の生成に失敗" >&2
 # ぷちごとのスキル（共通の skills/ ＋ そのぷちの skills/。W11）。自律行動と会話の claude が --add-dir で読む
 /opt/petit/scripts/gen-skills.sh || echo "[entrypoint] 警告: スキルの置き場の生成に失敗" >&2
+# ぷちの characters/<id>/ に無いファイル(深い層の SOUL_REFLECTIONS・REFLECTION_INDEX・ROUTINES_DETAIL・TODO_ARCHIVE など)を
+# 雛形 /opt/petit/sample-character から置く(T2・2026-10-12)。あるファイルは触らない。失敗しても起動は続ける
+/opt/petit/scripts/seed-character-files.sh || echo "[entrypoint] 警告: 雛形のファイルを置けなかった" >&2
 
 # --- 1. supercronic (cron) ---
 if [ -f /opt/petit/cron/petit.cron ]; then

@@ -113,6 +113,9 @@ COPY --chown=petit:petit scripts/gen-skills.sh /opt/petit/scripts/gen-skills.sh
 # ぷちの共通スキル（Claude Code の Skills。読書の reading など・W11）。gen-skills.sh がぷちごとの置き場
 # /opt/petit/run/skills/<id>/.claude/skills/ にまとめ、claude に --add-dir で渡す
 COPY --chown=petit:petit skills/ /opt/petit/skills/
+# ぷちのファイルの雛形(sample-character)。起動時に seed-character-files.sh が characters/<id>/ に無いファイルだけ置く(T2・2026-10-12)
+COPY --chown=petit:petit scripts/seed-character-files.sh /opt/petit/scripts/seed-character-files.sh
+COPY --chown=petit:petit sample-character/ /opt/petit/sample-character/
 
 RUN chmod +x /opt/petit/entrypoint.sh /opt/petit/scripts/*.sh
 
