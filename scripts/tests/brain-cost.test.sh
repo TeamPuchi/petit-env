@@ -8,6 +8,7 @@
 #   - --max-turns は settings.json の値を PETIT_AUTONOMOUS_MAX_TURNS（既定 5）で頭打ち。MAX_TURNS を渡せばそれ
 #   - 前の回の文脈が PETIT_AUTONOMOUS_CONTEXT_MAX（既定 30000）を越えていたら、続きにせず新しいセッション
 #   - 回の終わりに文脈の大きさ（数だけ）を state に残す
+#   - ログの [usage] の額は 1 回ぶん（cost_usd）とセッションの累計（cost_session_usd）を分けて書く（2026-10-11）
 #   - プロンプトに「1つか2つで足りる」「1つの出来事は1か所に1回」
 # claude と家 API の python は偽物を置く。claude・AWS には触らない。
 #
@@ -126,7 +127,8 @@ echo "$*" >> "$FAKE_CLAUDE_ARGS"
 echo '{"type":"system","subtype":"init","model":"claude-sonnet-5"}'
 echo '{"type":"assistant","message":{"id":"m1","content":[],"usage":{"input_tokens":3,"cache_creation_input_tokens":8000,"cache_read_input_tokens":0,"output_tokens":5}}}'
 echo "{\"type\":\"assistant\",\"message\":{\"id\":\"m2\",\"content\":[],\"usage\":{\"input_tokens\":2,\"cache_creation_input_tokens\":500,\"cache_read_input_tokens\":${FAKE_LAST_READ:-8000},\"output_tokens\":5}}}"
-echo '{"type":"result","subtype":"success","session_id":"s-new","num_turns":2,"total_cost_usd":0.03}'
+[ -n "${FAKE_NO_RESULT:-}" ] && exit 0
+echo "{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"${FAKE_SID:-s-new}\",\"num_turns\":2,\"total_cost_usd\":${FAKE_COST:-0.03}}"
 SH
 chmod +x "$WORK/bin/claude"
 export FAKE_CLAUDE_ARGS="$WORK/claude-args"
@@ -169,6 +171,34 @@ run
 echo 45000 > "$CHAR/state/.heartbeat-session-context"
 run PETIT_AUTONOMOUS_CONTEXT_MAX=0
 grep -q -- "--resume s-new" "$FAKE_CLAUDE_ARGS"; check "PETIT_AUTONOMOUS_CONTEXT_MAX=0 なら上限なし（前のまま）" $?
+
+# 額は 1 回ぶん（cost_usd）とセッションの累計（cost_session_usd）を分けてログに書く（2026-10-11）
+# CLI の total_cost_usd は --resume で続けたセッションの累計（家 API の tests/test_brain_cost.py と同じ数で確かめる）
+last_usage() { cat "$PETIT_DATA_DIR"/logs/mio/*.log | grep '^\[usage\]' | tail -n 1; }
+rm -f "$CHAR/state/.heartbeat-session-id" "$CHAR/state/.heartbeat-session-context" "$CHAR/state/.heartbeat-session-cost"
+run FAKE_SID=s1 FAKE_COST=0.243484
+last_usage | grep -q "type=new turns=2 cost_usd=0.243484 cost_session_usd=0.243484 "; check "新しいセッションの回は CLI の額そのまま" $?
+[ "$(cat "$CHAR/state/.heartbeat-session-cost")" = "s1 0.243484" ]; check "セッションと累計を state に残す" $?
+run FAKE_SID=s1 FAKE_COST=1.52038
+last_usage | grep -q "type=resume turns=2 cost_usd=1.276896 cost_session_usd=1.52038 "; check "続きの回は前の回の累計を引く（1.52038 - 0.243484）" $?
+run FAKE_SID=s1 FAKE_COST=1.6041528
+last_usage | grep -q "type=resume turns=2 cost_usd=0.083773 cost_session_usd=1.6041528 "; check "もう1回続けても前の回との差（1.6041528 - 1.52038）" $?
+rm -f "$CHAR/state/.heartbeat-session-cost"
+run FAKE_SID=s1 FAKE_COST=1.7
+last_usage | grep -q "type=resume turns=2 cost_usd=? cost_session_usd=1.7 "; check "前の回の累計が分からない続きの回は ?（累計を 1 回ぶんとして書かない）" $?
+echo "other 0.1" > "$CHAR/state/.heartbeat-session-cost"
+run FAKE_SID=s1 FAKE_COST=1.8
+last_usage | grep -q "type=resume turns=2 cost_usd=? cost_session_usd=1.8 "; check "別のセッションの累計は引かない" $?
+echo "s1 2.0" > "$CHAR/state/.heartbeat-session-cost"
+run FAKE_SID=s1 FAKE_COST=0.5
+last_usage | grep -q "type=resume turns=2 cost_usd=? cost_session_usd=0.5 "; check "累計が前の回より減ったら ?" $?
+[ "$(cat "$CHAR/state/.heartbeat-session-cost")" = "s1 0.5" ]; check "減っても今の累計に置き換える（次の回はここから引く）" $?
+run FAKE_SID=s1 FAKE_COST=0.6
+last_usage | grep -q "type=resume turns=2 cost_usd=0.100000 cost_session_usd=0.6 "; check "置き換えた累計から引く" $?
+run FAKE_NO_RESULT=1
+last_usage | grep -q "cost_usd=? cost_session_usd=? "; check "result 行が無い回（上限時間など）は ?（0 と書かない）" $?
+[ "$(cat "$CHAR/state/.heartbeat-session-cost")" = "s1 0.6" ]; check "result 行が無い回は state の累計を変えない" $?
+rm -f "$CHAR/state/.heartbeat-session-id" "$CHAR/state/.heartbeat-session-cost"
 
 # プロンプト（--dry-run で見る）
 OUT=$(env PETIT_HOUSE_TABLE= PATH="$WORK/bin:$PATH" bash "$SCRIPT" mio --dry-run 2>/dev/null)
