@@ -751,8 +751,95 @@ else
   # 一時ファイルに受けて、要る数値（session_id・回数・費用・成否）だけを取り出したら消す。
   STREAM_FILE="$(mktemp "${TMPDIR:-/tmp}/petit-stream.XXXXXX")"
   PROMPT_FILE="$(mktemp "${TMPDIR:-/tmp}/petit-prompt.XXXXXX")"
-  trap 'rm -f "$STREAM_FILE" "$PROMPT_FILE"' EXIT
+  # 予約したまま途中で抜けたら取り消す（おやつ。下の snack_consume）
+  trap 'snack_abandon; rm -f "$STREAM_FILE" "$PROMPT_FILE"' EXIT
   printf '%s' "$PROMPT" > "$PROMPT_FILE"
+
+  # --- おやつ（設計書 §5 ⑤・家 API 契約 §⑧ 8-5） ---
+  # ぷちの自分からの動きは、ぷちの財布（P#<pid>）のおやつを食べる。claude を呼ぶ前に予約（reserve）、
+  # 動いたら確定（confirm）、動かなかったら取り消し（cancel）を、家 API の
+  # POST /internal/petits/<pid>/snacks/consume に頼む（体の口と同じ関所: 127.0.0.1 から・x-petit-internal-secret）。
+  # 1 回の自律行動で同じ run_id を使う（家 API の冪等キー tick#<pid>#<run_id>）。
+  # 10/16 は記録だけ: 口が無い・つながらない・エラー・402 no_snacks でも自律行動は止めない（ログに1行だけ）。
+  # 止めるのは ⑨（PETIT_SNACK_ENFORCE=1 のときの 402 で眠る）で、ここではまだ見ない。
+  # 対象は cron の自律行動だけ: 夜の今日をふり返る回（--diary）・手で渡すプロンプト（-p / --test-prompt）・
+  # 家の表が無い環境（PETIT_HOUSE_TABLE 未設定）・PETIT_SNACK_CONSUME=0 では呼ばない。
+  SNACK_RUN_ID=""
+  SNACK_PENDING=false
+  if [ "$RUN_SOURCE" = autonomous ] && [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] \
+     && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_SNACK_CONSUME:-1}" != "0" ] && command -v curl > /dev/null 2>&1; then
+    # 家 API は run_id を英数字と - _ の 64 文字までに限る
+    SNACK_RUN_ID="auto-${_LOG_TIMESTAMP}-$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n')"
+  fi
+  snack_consume() {  # snack_consume reserve|confirm|cancel [usage の JSON]
+    [ -n "$SNACK_RUN_ID" ] || return 0
+    local op="$1" usage="${2:-null}" base secret body out code
+    base="${PETIT_HOUSE_API_URL:-}"
+    base="${base%/}"
+    [ -n "$base" ] || base="http://127.0.0.1:${PORT:-8765}"
+    secret="${PETIT_INTERNAL_SECRET:-${PETIT_GATEWAY_SECRET:-}}"
+    body=$(jq -cn --arg op "$op" --arg run "$SNACK_RUN_ID" --argjson usage "$usage" \
+      '{op: $op, run_id: $run, action: "autonomous", snacks: null, usage: $usage}' 2>/dev/null) \
+      || body=$(jq -cn --arg op "$op" --arg run "$SNACK_RUN_ID" \
+        '{op: $op, run_id: $run, action: "autonomous", snacks: null, usage: null}')
+    # 秘密は引数に出さない（ps で見える）。curl の設定として標準入力から渡す
+    secret="${secret//\\/\\\\}"
+    secret="${secret//\"/\\\"}"
+    out=$(printf 'header = "x-petit-internal-secret: %s"\n' "$secret" \
+      | curl -sS -K - --connect-timeout "${PETIT_SNACK_CONNECT_TIMEOUT_S:-2}" --max-time "${PETIT_SNACK_TIMEOUT_S:-5}" \
+          -H 'content-type: application/json' --data-binary "$body" -w '\n%{http_code}' \
+          "$base/internal/petits/$CHARACTER_ID/snacks/consume" 2>&1)
+    code="${out##*$'\n'}"
+    out="${out%"$code"}"
+    out=$(printf '%s' "$out" | tr -d '\n' | cut -c1-200)
+    case "$code" in
+      200)
+        # 残高・予約の数だけ残す（台帳の結果。本文は無い）
+        echo "[snack] $op run=$SNACK_RUN_ID $(printf '%s' "$out" | jq -c '{kind, reserved, amount, released, short, balance, replayed, enforce} | with_entries(select(.value != null))' 2>/dev/null || echo "$out")" >> "$LOG_FILE"
+        ;;
+      402)
+        echo "[snack] $op run=$SNACK_RUN_ID 402 おやつが足りない（10/16 は止めない） $out" >> "$LOG_FILE"
+        ;;
+      *)
+        echo "[snack] $op run=$SNACK_RUN_ID 呼べなかった（http=${code:-?}。自律行動は続ける） $out" >> "$LOG_FILE"
+        ;;
+    esac
+    return 0
+  }
+  snack_abandon() {  # 予約したまま終わらずに抜けるとき
+    if [ "$SNACK_PENDING" = true ]; then
+      SNACK_PENDING=false
+      snack_consume cancel
+    fi
+  }
+  snack_finish() {  # 動いた（result 行がある）なら確定、claude が動かなかったなら取り消し
+    [ "$SNACK_PENDING" = true ] || return 0
+    SNACK_PENDING=false
+    local result_line init_line usage
+    result_line=$(grep -m1 '"type":"result"' "$STREAM_FILE" 2>/dev/null)
+    if [ -z "$result_line" ]; then
+      snack_consume cancel
+      return 0
+    fi
+    # usage は運営の見積もり用（里親には出さない）。家 API の usage_ledger と同じく result 行の usage を読む。
+    # tokens_in は入力（キャッシュに書いた分を含む）、cache_read はキャッシュから読んだ分。額は上の [usage] 行の 1 回ぶん
+    init_line=$(grep -m1 '"type":"system"' "$STREAM_FILE" 2>/dev/null)
+    usage=$(jq -cn --argjson r "$result_line" --argjson i "${init_line:-null}" --arg cost "${COST:-?}" '
+      ($r.usage // null) as $u
+      | if $u == null then null else
+          {tokens_in: (($u.input_tokens // 0) + ($u.cache_creation_input_tokens // 0)),
+           tokens_out: ($u.output_tokens // 0),
+           cache_read: ($u.cache_read_input_tokens // 0),
+           model: (($i // {}).model // ($r.modelUsage // {} | keys | .[0]) // null),
+           usd_estimate: ($cost | tonumber? // null)}
+        end' 2>/dev/null) || usage=null
+    snack_consume confirm "${usage:-null}"
+  }
+
+  if [ -n "$SNACK_RUN_ID" ]; then
+    snack_consume reserve
+    SNACK_PENDING=true
+  fi
 
   # コスト台帳（家 API の usage/YYYY-MM.jsonl。チャットと同じ台帳）に 1 回 1 行足す。
   # 家 API の scripts/record_usage.py が stream から額・トークン・道具の名前・長さだけを抜く（本文は入れない）。
@@ -869,6 +956,7 @@ else
   else
     run_new_session 1
   fi
+  snack_finish
 fi
 
 # 夜の回: 本人が diary_write を呼んだかだけ残す(本文は残さない)。呼ばなかった日は 4:00 の sleep が今までの形で書く
