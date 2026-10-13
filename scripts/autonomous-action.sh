@@ -520,7 +520,7 @@ ${DESIRE_SECTION}
 - 毎回新しいセッションで始まるので、この回で印象に残ったことは、この回のうちに memory の remember で残す(残さなければ次の回の自分は知らない)。やたらではなく、印象に残ったことだけ。前の回のことは SOUL.md・TODO・日記のまとめ・記憶で持つ
 - 日記は夜(20 時半ごろ)の「今日をふり返る回」に、その日の会話と出来事を見返して自分で書く(house の diary_write)ので、ここでは書かない
 - 置き場: 記憶(memory)・ノート(house の note_*。里親にも見える覚え書き。上限 100 件)・手紙(mail_*)${SNS_PLACE}・TODO_ACTIVE.md(毎回このプロンプトに読み込まれる)。自分のファイル(SOUL.md・ROUTINES.md・SOUL_REFLECTIONS.md など)は Read/Edit で読み書きできる。ひとりで動くときの作法(1回にどれだけやるか・どこに何を書くか・声の出し方)は SOUL.md の行動原則で自分が決めたとおりに
-- 声(body_speak)はその場で消える。ひとりのときに話した声は聞き逃されやすいが、話した声は里親さんのボイスメモにも残る(残さなくていいときは keep_voice_memo=false)
+- 声(body_speak)はその場で消える。話した声は里親さんのボイスメモにも残る(ひとりのときも会話のときも。残さなくていいときは keep_voice_memo=false)
 - 目: ちらっと見る body_glance・じっと見る body_gaze。見ただけでは残らない。残したいものだけ、house の album_keep に seen_id を渡してアルバムに残す(残したものは里親さんにも見える)。見た目ごと覚えておきたいときは memory の save_visual_memory に、返事に出る image_path を渡す
 - 眠る: house の body_sleep で眠れる(起きるのは body_wake。里親さんが顔を3回とんとんしても起きる)。朝や昼に活動を始めるとき、体がまだ眠ったままなら(体の知らせ・body_now で分かる)、body_wake で起きてから動く
 ${MAILBOX_NOTICE:+
@@ -785,9 +785,8 @@ else
     archive_stream "$@"
   }
 
-  # 自律行動で話した声（house の body_speak）は、既定で里親さんのボイスメモにも残す（house MCP がこの env を見る。
-  # 会話では残さない。なぎさん 2026-10-07「自律行動のときの音声は聞き逃しやすい」）
-  export PETIT_SPEAK_KEEPS_VOICE_MEMO=1
+  # 話した声（house の body_speak）は、自律行動でも会話でも既定で里親さんのボイスメモに残る（家 API の body_mcp.py。
+  # なぎさん 2026-10-12「会話の声も残す」。10/07〜10/12 の env PETIT_SPEAK_KEEPS_VOICE_MEMO＝自律行動だけ 1 は無くした）
 
   claude_run() {  # claude_run [--resume <id>] — プロンプトを渡して stream を $STREAM_FILE に受ける
     echo "$PROMPT" | claude "$@" "${CLAUDE_ARGS[@]}" ${THINK_ARGS[@]+"${THINK_ARGS[@]}"} > "$STREAM_FILE" 2>&1
