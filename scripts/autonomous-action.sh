@@ -760,12 +760,15 @@ else
   # 動いたら確定（confirm）、動かなかったら取り消し（cancel）を、家 API の
   # POST /internal/petits/<pid>/snacks/consume に頼む（体の口と同じ関所: 127.0.0.1 から・x-petit-internal-secret）。
   # 1 回の自律行動で同じ run_id を使う（家 API の冪等キー tick#<pid>#<run_id>）。
-  # 10/16 は記録だけ: 口が無い・つながらない・エラー・402 no_snacks でも自律行動は止めない（ログに1行だけ）。
-  # 止めるのは ⑨（PETIT_SNACK_ENFORCE=1 のときの 402 で眠る）で、ここではまだ見ない。
+  # 口が無い・つながらない・エラーでは自律行動は止めない（ログに1行だけ）。
+  # 予約で 402 no_snacks なら、この回は動かずに眠る（⑨・設計書 §4-5）。家 API が 402 を返すのは
+  # PETIT_SNACK_ENFORCE=1 のときだけ（既定 0＝記録だけ。足りなくても 200 で short: true）なので、
+  # 止めるかどうかの切り替えは家 API の env 1つ。確定・取り消しの 402 では止めない（もう動いたあと）。
   # 対象は cron の自律行動だけ: 夜の今日をふり返る回（--diary）・手で渡すプロンプト（-p / --test-prompt）・
   # 家の表が無い環境（PETIT_HOUSE_TABLE 未設定）・PETIT_SNACK_CONSUME=0 では呼ばない。
   SNACK_RUN_ID=""
   SNACK_PENDING=false
+  SNACK_HUNGRY=false
   if [ "$RUN_SOURCE" = autonomous ] && [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] \
      && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_SNACK_CONSUME:-1}" != "0" ] && command -v curl > /dev/null 2>&1; then
     # 家 API は run_id を英数字と - _ の 64 文字までに限る
@@ -798,7 +801,12 @@ else
         echo "[snack] $op run=$SNACK_RUN_ID $(printf '%s' "$out" | jq -c '{kind, reserved, amount, released, short, balance, replayed, enforce} | with_entries(select(.value != null))' 2>/dev/null || echo "$out")" >> "$LOG_FILE"
         ;;
       402)
-        echo "[snack] $op run=$SNACK_RUN_ID 402 おやつが足りない（10/16 は止めない） $out" >> "$LOG_FILE"
+        if [ "$op" = reserve ]; then
+          SNACK_HUNGRY=true
+          echo "[snack] $op run=$SNACK_RUN_ID 402 おやつが足りない。この回は動かずに眠る $out" >> "$LOG_FILE"
+        else
+          echo "[snack] $op run=$SNACK_RUN_ID 402 おやつが足りない $out" >> "$LOG_FILE"
+        fi
         ;;
       *)
         echo "[snack] $op run=$SNACK_RUN_ID 呼べなかった（http=${code:-?}。自律行動は続ける） $out" >> "$LOG_FILE"
@@ -838,6 +846,11 @@ else
 
   if [ -n "$SNACK_RUN_ID" ]; then
     snack_consume reserve
+    if [ "$SNACK_HUNGRY" = true ]; then
+      # 予約できていないので取り消しも要らない。claude は呼ばない（費用もかからない）
+      echo "[skip] おやつ切れ（ぷちの財布が足りない）。claude を呼ばずに終わる" >> "$LOG_FILE"
+      exit 0
+    fi
     SNACK_PENDING=true
   fi
 
