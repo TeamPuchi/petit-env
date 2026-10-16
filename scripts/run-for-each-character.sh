@@ -5,12 +5,12 @@
 # 書く代わりに、この1本の窓口スクリプトがCHARACTER_IDS環境変数を動的に展開する。
 #
 # Usage:
-#   run-for-each-character.sh <autonomous|desire|diary|sleep|memory-sleep|snack-monthly>
+#   run-for-each-character.sh <autonomous|desire|diary|sleep|memory-sleep>
 set -u
 
 JOB="${1:-}"
 if [ -z "$JOB" ]; then
-  echo "Usage: $0 <autonomous|desire|diary|sleep|memory-sleep|snack-monthly>" >&2
+  echo "Usage: $0 <autonomous|desire|diary|sleep|memory-sleep>" >&2
   exit 1
 fi
 
@@ -99,32 +99,6 @@ for c in "${CHARS[@]}"; do
         )
       else
         echo "[run-for-each-character] $REPOS_DIR/petit-memory が未同期。memory-sleepスキップ (character=$CHARACTER_ID)" >&2
-      fi
-      ;;
-    snack-monthly)
-      # 月きほんのおやつ(akatsuki-petit#102・設計書 §4-5 の2)。家 API の scripts/snack_grant.py monthly <id> を呼ぶ。
-      # 冪等キー monthly#<id>#<YYYY-MM>(JST)で、同じ月に何回呼んでも1回しか入らない。だから cron は毎日回し、
-      # 月初にコンテナが止まっていた月も翌日以降に入る。数・入れる先は家 API の env(PETIT_SNACK_MONTHLY・
-      # PETIT_SNACK_MONTHLY_TO)。PETIT_SNACK_MONTHLY_AUTO=0 で止める(手で配る運用に戻す)。
-      # 家の表が無い環境・snack_grant.py の無い古い家 API では何もしない
-      HOUSE_API_DIR="$REPOS_DIR/m5-petit-app"
-      SNACK_GRANT="$HOUSE_API_DIR/scripts/snack_grant.py"
-      if [ "${PETIT_SNACK_MONTHLY_AUTO:-1}" = "0" ]; then
-        echo "[run-for-each-character] PETIT_SNACK_MONTHLY_AUTO=0。snack-monthlyスキップ (character=$CHARACTER_ID)" >&2
-      elif [ -z "${PETIT_HOUSE_TABLE:-}" ]; then
-        echo "[run-for-each-character] PETIT_HOUSE_TABLE が未設定。snack-monthlyスキップ (character=$CHARACTER_ID)" >&2
-      elif [ ! -f "$SNACK_GRANT" ]; then
-        echo "[run-for-each-character] $SNACK_GRANT が無い。snack-monthlyスキップ (character=$CHARACTER_ID)" >&2
-      else
-        if [ -x "$HOUSE_API_DIR/.venv/bin/python" ]; then
-          HOUSE_PY=("$HOUSE_API_DIR/.venv/bin/python")            # 焼き込み済み
-        else
-          HOUSE_PY=(uv run --directory "$HOUSE_API_DIR" python)   # dev
-        fi
-        # 結果は JSON(残高・入った数・2回目なら replayed)。1行に詰めて残す
-        OUT="$(timeout 60 "${HOUSE_PY[@]}" "$SNACK_GRANT" monthly "$CHARACTER_ID" --by cron 2>&1)"
-        RC=$?
-        echo "[snack-monthly] $(date -Iseconds) $CHARACTER_ID rc=$RC $(printf '%s' "$OUT" | tr -d '\n' | tr -s ' ' | cut -c1-300)"
       fi
       ;;
     *)

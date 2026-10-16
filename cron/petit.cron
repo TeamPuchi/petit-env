@@ -36,8 +36,3 @@
 # claude CLI の会話記録(~/.claude/projects 等)を消す: 毎日3:17、24時間より古いもの(K21)
 # 記憶は記憶 MCP が持つので、claude 側には残さない
 17 3 * * * /opt/petit/scripts/purge-claude-transcripts.sh >> /data/logs/purge-claude-cron.log 2>&1
-
-# 月きほんのおやつ(akatsuki-petit#102): 毎日 0:10 に、各ぷちの財布(P#<id>)へ今月の分を入れる。
-# 冪等キー monthly#<id>#<YYYY-MM> で月1回しか入らないので、毎日回しても同じ(月初に止まっていても翌日に入る)。
-# 止めるのは PETIT_SNACK_MONTHLY_AUTO=0
-10 0 * * * /opt/petit/scripts/run-for-each-character.sh snack-monthly >> /data/logs/snack-monthly-cron.log 2>&1
