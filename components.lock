@@ -6,7 +6,7 @@
 #
 # 列: 名前（/opt/petit/repos/<名前> になる） リポジトリ SHA リポ内のディレクトリ（. = 全体）
 # m5-petit-app は 2026-09-26 に TeamPuchi/petit-api へ改名した。名前の列（コンテナ内のパス）は据え置く。
-m5-petit-app  TeamPuchi/petit-api      b50946815986f052f29372d41544876242ec64c1  .
+m5-petit-app  TeamPuchi/petit-api      160da0a3f6f6e112d443a8303b6ecb16537f701d  .
 petit-memory  TeamPuchi/petit-memory  58e5ef737433a846454cd9327e8ba989fa11c013  .
 petit-sns     TeamPuchi/petit-sns     dde09dfbbd442939af08aadda900adbf4aa9f258  sns-api
 petit-desire  TeamPuchi/petit-desire  339e3ffe2d6dc92b960a5ce6b40e415af32ee176  .
