@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # autonomous-action.sh が、自律行動の前に家 API の /internal/petits/<id>/snacks/consume へ reserve、
-# 動いたら confirm、claude が動かなかったら cancel を頼むか。口が呼べなくても・402 でも自律行動を止めないか
-# （10/16 は記録だけ。設計書 §5 ⑤・家 API 契約 §⑧ 8-5）。
+# 動いたら confirm、claude が動かなかったら cancel を頼むか。口が呼べなくても自律行動を止めないか。
+# 予約で 402 なら動かずに眠るか（⑨。家 API が 402 を返すのは PETIT_SNACK_ENFORCE=1 のときだけ）。
+# （設計書 §5 ⑤・家 API 契約 §⑧ 8-5）。
 # 家 API の代わりに 127.0.0.1 の小さな HTTP サーバーを立て、本物の curl で呼ばせる。claude は偽物。AWS には触らない。
 #
 # Usage: bash scripts/tests/snack-consume.test.sh
@@ -123,11 +124,18 @@ check "予約: action=autonomous・snacks=null・usage=null" $?
 check "確定: result 行の usage・モデル・1回ぶんの額を添える" $?
 echo "$LOG" | grep -q '^\[snack\] reserve run=auto-.* {"kind":"reserve"'; check "ログに予約の結果を1行" $?
 
-# 2. 予約で 402（止めるモードの形）でも、10/16 は止めない
+# 2. 予約で 402（家 API が PETIT_SNACK_ENFORCE=1 のときだけ返す）なら、動かずに眠る（⑨）
 run STATUS_reserve=402
-[ "$(wc -l < "$FAKE_CLAUDE_CALLS")" -eq 1 ]; check "402 でも claude を呼ぶ（10/16 は止めない）" $?
-[ "$(ops)" = "reserve confirm" ]; check "402 のあとも確定を頼む" $?
-echo "$LOG" | grep -q '\[snack\] reserve .* 402'; check "402 はログに1行" $?
+[ "$RC" -eq 0 ]; check "402: 正常に終わる" $?
+[ ! -s "$FAKE_CLAUDE_CALLS" ]; check "402: claude を呼ばない" $?
+[ "$(ops)" = "reserve" ]; check "402: 予約のあと確定も取り消しも頼まない" $?
+echo "$LOG" | grep -q '\[snack\] reserve .* 402 .*眠る'; check "402 はログに1行" $?
+echo "$LOG" | grep -q '^\[skip\] おやつ切れ'; check "402: 眠ったことをログに1行" $?
+
+# 2b. 確定で 402 でも（もう動いたあと）そのまま終わる
+run STATUS_confirm=402
+[ "$RC" -eq 0 ] && [ "$(wc -l < "$FAKE_CLAUDE_CALLS")" -eq 1 ]; check "確定の 402: 動いたまま正常に終わる" $?
+[ "$(ops)" = "reserve confirm" ]; check "確定の 402: 取り消しは頼まない" $?
 
 # 3. 家 API がエラー（503）でも止めない
 run STATUS_reserve=503 STATUS_confirm=503
