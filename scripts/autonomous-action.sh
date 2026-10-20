@@ -982,4 +982,19 @@ if [ "$DIARY_ROUND" = true ] && [ "$DRY_RUN" = false ]; then
     echo "[diary] 日記を書かなかった(diary_write を呼んでいない。4:00 の sleep が書く)" >> "$LOG_FILE"
   fi
 fi
+# 行動で欲求を満たす(澪のリクエスト 2026-10-20「72 時間ずっと 1.00 のものがあった」): この回で使った道具の名前を
+# 欲求エンジンに渡す。その道具を actions に持つ欲求が少し下がる(petit-desire actions.py。WebSearch・book_read で
+# 知りたい など)。渡すのは道具の名前だけ(入力・本文は渡さない)。下がらなくても自律行動は止めない
+if [ "$DRY_RUN" = false ] && [ "${#DESIRE_ENV[@]}" -gt 0 ] && [ -s "${STREAM_FILE:-}" ]; then
+  mapfile -t USED_TOOLS < <(jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | .name' \
+    "$STREAM_FILE" 2>/dev/null | tr -d '\r')
+  if [ "${#USED_TOOLS[@]}" -gt 0 ]; then
+    if [ -x "$REPOS_DIR/petit-desire/.venv/bin/desire-act" ]; then
+      DESIRE_ACT_CMD=("$REPOS_DIR/petit-desire/.venv/bin/desire-act")
+    else
+      DESIRE_ACT_CMD=(uv run --directory "$REPOS_DIR/petit-desire" desire-act)
+    fi
+    env "${DESIRE_ENV[@]}" timeout 60 "${DESIRE_ACT_CMD[@]}" "$CHARACTER_ID" "${USED_TOOLS[@]}" >> "$LOG_FILE" 2>&1 || true
+  fi
+fi
 echo "=== 自律行動終了: $(date "+%Y-%m-%d %H:%M:%S") (character=$CHARACTER_ID) ===" >> "$LOG_FILE"
