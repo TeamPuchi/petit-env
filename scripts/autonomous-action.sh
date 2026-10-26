@@ -205,6 +205,34 @@ if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_H
   esac
 fi
 
+# --- おやすみモード(akatsuki-petit#257・#267。2026-10-27) ---
+# 親が本体の右上を 3 秒おさえて 4 けたの「あいことば」を入れて止めているあいだは、自律行動しない
+# (「止められます」と里親さんに言っている分。起こすのも本体のあいことば)。状態は house 表の機体の行の locked
+# (家 API の iot_bridge が event lock・status から写す)。判定は家 API の scripts/lock_state.py <id> gate:
+#   0 = 動いてよい → 続ける / 3 = 止まっている → 何もせず抜ける / それ以外 = 読めない → 今回は抜ける(20分後にまた見る)
+# 止める側に倒すのは、親が止めたことを「止まっていませんでした」にしないため。
+# 欲求の更新(cron の desire ジョブ)はここを通らないので止まらない。夜の今日をふり返る回(--diary)も止めない
+# (体も声も使わず、止められたこともふり返りに入る)。
+# 対象外: 手で渡すプロンプト(-p / --test-prompt)・家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・
+#   関所の入っていない古い家 API・PETIT_LOCK_GATE=0。
+LOCK_GATE="$HOUSE_API_DIR/scripts/lock_state.py"
+if [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] \
+   && [ "${PETIT_LOCK_GATE:-1}" != "0" ] && [ -f "$LOCK_GATE" ] && [ "$DIARY_ROUND" = false ]; then
+  LOCK_OUT=$(timeout 30 "${HOUSE_PY[@]}" "$LOCK_GATE" "$CHARACTER_ID" gate 2>>"$LOG_FILE")
+  LOCK_CODE=$?
+  case "$LOCK_CODE" in
+    0) ;;
+    3)
+      echo "おやすみモードのため自律行動しない ($LOCK_OUT)" >> "$LOG_FILE"
+      exit 0
+      ;;
+    *)
+      echo "おやすみモードの状態を読めないので今回は自律行動しない (exit=$LOCK_CODE $LOCK_OUT)" >> "$LOG_FILE"
+      exit 0
+      ;;
+  esac
+fi
+
 # --- 日時の取得(コンテナは常にLinuxなので date -d のみ対応) ---
 if [ -n "$OVERRIDE_DATE" ]; then
   CURRENT_DATE=$(date -d "$OVERRIDE_DATE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
