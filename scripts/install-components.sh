@@ -50,6 +50,14 @@ if has petit-desire; then
   "$REPOS_DIR/petit-desire/.venv/bin/python" -c "import petit_desire.server, petit_desire.cli; print('petit-desire ok')"
 fi
 
+# ---- petit-textbook（ぷちの教科書と、それを読む MCP。10/27 Sync 40番）---------
+# 必須ではない（無ければ載せない）。pyproject は mcp/ の中にある。教科書の本文は petit/
+if [[ -f "$REPOS_DIR/petit-textbook/mcp/pyproject.toml" ]]; then
+  echo "[install-components] petit-textbook (教科書の MCP)"
+  (cd "$REPOS_DIR/petit-textbook/mcp" && uv sync --frozen --no-dev)
+  "$REPOS_DIR/petit-textbook/mcp/.venv/bin/python" -c "import textbook_mcp.server; print('petit-textbook ok')"
+fi
+
 # ---- petit-memory（記憶 MCP）----------------------------------------------
 # uv.lock の torch は Linux では CUDA 版（nvidia-*・cuda-*・triton で数 GB）を引く。
 # EC2 ホスト（t4g・GPU 無し）では使わないので、版は lock のまま CPU 版の wheel に差し替える。
