@@ -25,13 +25,13 @@
 30 20 * * * /opt/petit/scripts/run-for-each-character.sh diary >> /data/logs/diary-cron.log 2>&1
 
 # 寝る(日付の変わり目): 毎晩4:00。会話のセッションを切る(今までどおり)。夜の回で日記を書けなかった日は、その前に
-# 家 API が今までの形で書く(akatsuki-petit#133 → scripts/go_to_sleep.py)。記憶の整理(memory-sleep)の前に置く
+# 家 API が今までの形で書く(akatsuki-petit#133 → scripts/go_to_sleep.py)
 0 4 * * * /opt/petit/scripts/run-for-each-character.sh sleep >> /data/logs/sleep-cron.log 2>&1
 
-# 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
-# これは仕組みが回す整理。ぷち自身がやる「記憶の整理」「記憶の統合」(週1・日中でもよい)は ROUTINES.md のルーチンで、
-# 自律行動の memory の道具(consolidate_memories・link_memories など)を使う(T5・2026-10-12)
-5 4 * * * /opt/petit/scripts/run-for-each-character.sh memory-sleep >> /data/logs/memory-sleep-cron.log 2>&1
+# 記憶の整理(memory sleep)は仕組みでは回さない(2026-10-28 なぎさん)。記憶を寝ている間に勝手にまとめる・薄める・消すのは、
+# ぷちが自分で覚えて自分で整理するという考え方と合わない。整理・統合はぷち自身が ROUTINES.md の
+# 「記憶の整理」「記憶の統合」で、自律行動の memory の道具(consolidate_memories・link_memories など)を使ってやる(T5)。
+# 手で一度だけ回すなら run-for-each-character.sh memory-sleep(ログは残る)。
 
 # claude CLI の会話記録(~/.claude/projects 等)を消す: 毎日3:17、24時間より古いもの(K21)
 # 記憶は記憶 MCP が持つので、claude 側には残さない
