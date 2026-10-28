@@ -29,6 +29,9 @@
 #   ここで渡すのは PETIT_ID・PETIT_DATA_DIR だけ。家の表・鍵の表・KMS・リージョンは
 #   コンテナの env（家 API と同じ PETIT_HOUSE_TABLE など）をそのまま読む。
 #
+# 教科書（petit-textbook。PetitOnes/petit-textbook が焼き込まれているときだけ載せる・10/27 Sync 40番）:
+#   ぷちの教科書（petit/ の章）を読む道具（textbook_index・read・search・version）。ローカルのぷちと同じ MCP。
+#
 # 道具の説明を最初から載せる（W12・2026-09-30 → 2026-10-03 一覧を1か所に）:
 #   claude は MCP の道具が多いと説明を最初には載せず、要るときに ToolSearch で探す（1 往復増える）。
 #   - 道具ごと: 一覧は scripts/preload-tools.txt（mcp__<サーバー>__<道具> を1行に1つ。選び方もそこに）。
@@ -122,16 +125,27 @@ gen_one() {
       .env = {PETIT_ID: $id, PETIT_DATA_DIR: $data}')"
   fi
 
+  # 教科書の MCP（petit-textbook が焼き込まれているときだけ。10/27 Sync 40番。ローカルのぷちと同じ MCP）。
+  # 読むのは PETIT_TEXTBOOK_DIR/petit/。教科書への提案（textbook_propose）はファイルのノートに書く作りで、
+  # クラウドのノート（家 API）には出ないので、許可の一覧（家 API・autonomous-action.sh）には入れない
+  local textbook="null"
+  if [[ -f "$REPOS_DIR/petit-textbook/mcp/pyproject.toml" ]]; then
+    textbook="$(server_cmd "$REPOS_DIR/petit-textbook/mcp" textbook-mcp | jq \
+      --arg id "$id" --arg data "$PETIT_DATA_DIR" --arg dir "$REPOS_DIR/petit-textbook" '
+      .env = {CHARACTER_ID: $id, PETIT_DATA_DIR: $data, PETIT_TEXTBOOK_DIR: $dir}')"
+  fi
+
   local preload
   preload="$(preload_json)"
 
   mkdir -p "$OUT_DIR" "$PETIT_DATA_DIR/sns/$id"
-  jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" \
+  jq -n --argjson m "$memory" --argjson s "$sns" --argjson d "$desire" --argjson h "$house" --argjson t "$textbook" \
     --arg always "${PETIT_MCP_ALWAYS_LOAD-}" --argjson pl "$preload" '
     ($always | split(",") | map(gsub("^ +| +$"; "")) | map(select(. != ""))) as $al
     | {mcpServers: ({memory: $m, "petit-sns": $s}
                     + (if $d != null then {"desire-system": $d} else {} end)
-                    + (if $h != null then {house: $h} else {} end))}
+                    + (if $h != null then {house: $h} else {} end)
+                    + (if $t != null then {"petit-textbook": $t} else {} end))}
     | .mcpServers |= with_entries(if (.key | IN($al[])) then .value.alwaysLoad = true else . end)
     | .mcpServers |= with_entries(
         ("mcp__" + .key + "__") as $p
@@ -143,7 +157,7 @@ gen_one() {
     | $pl[] | select(. as $n | [$ps[] | . as $p | $n | startswith($p)] | any | not)' "$OUT_DIR/$id.json.tmp" \
     | while read -r n; do echo "[gen-mcp-config] 警告: 最初から載せる一覧の $n はどの MCP サーバーにも当たらない（載せない）" >&2; done
   mv "$OUT_DIR/$id.json.tmp" "$OUT_DIR/$id.json"
-  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off) house=$([[ "$house" != null ]] && echo on || echo off))"
+  echo "[gen-mcp-config] $OUT_DIR/$id.json (memory=$store${table:+:$table} desire=$([[ "$desire" != null ]] && echo on || echo off) house=$([[ "$house" != null ]] && echo on || echo off) textbook=$([[ "$textbook" != null ]] && echo on || echo off))"
 }
 
 if [[ -n "${1:-}" ]]; then

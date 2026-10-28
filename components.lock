@@ -10,3 +10,5 @@ m5-petit-app  TeamPuchi/petit-api      20141fd0af320e3abe15be70741731ca6c3ad482 
 petit-memory  TeamPuchi/petit-memory  9b0682771329ab89f56b18d2fd766d97bed363f7  .
 petit-sns     TeamPuchi/petit-sns     dde09dfbbd442939af08aadda900adbf4aa9f258  sns-api
 petit-desire  TeamPuchi/petit-desire  d518c60610909c4b34f6eb7d48c1250fc6fbcd30  .
+# ぷちの教科書（10/27 Sync 40番）。public。リポ全体（petit/ の章を MCP が読む）。MCP は mcp/ の中（install-components.sh）
+petit-textbook PetitOnes/petit-textbook 9e7678b7f541ef13bc2c0899e2fd2f7466fdf8a2  .
