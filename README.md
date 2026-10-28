@@ -237,6 +237,9 @@ docker compose -f docker-compose.release.yml build
   `--tools`、Linux 版(WSL)で旗の受け付けと別名 sonnet → `claude-sonnet-5-5`・「No conversation found」を確かめた。`--help` の違いは
   `--client-data-url`・`--desktop` が増え、`--agents` がファイルも受けるようになっただけ。stream-json に `system` の `post_turn_summary`・
   `commands_changed`・`thinking_tokens` 行が出るが、家 API・台帳は `init` 以外の system 行を読まないので影響なし）
+  （2026-10-29 に `2.1.308`(stable)に上げた。Haiku 5.5(`claude-haiku-5-5`)を知っているのが 2.1.293 から。Linux 版で、上の旗を受け付けること、
+  `--model claude-haiku-5-5` の `result` 行(`subtype`・`is_error`・`num_turns`・`session_id`・`total_cost_usd`、`modelUsage` に `claude-haiku-5-5`)、
+  「No conversation found」が前と同じことを確かめた）
 - `docker compose up -d` → `entrypoint.sh` が起動し、supercronicがcrontabを読み込んでジョブを実際に発火(1分間隔のテストcrontabで実行成功を確認)
 - 5コンポーネントの `.venv` は匿名ボリュームにより `petit:petit` 所有になり、`uv run` が通る。ホスト側の `repos/<name>/.venv` は空のまま(T3の設計どおり)
 
