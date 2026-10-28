@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 深い層のファイルと、頭脳の言葉の直し（brain-plan T2・T5〜T10・2026-10-12）を確かめる。
-# - seed-character-files.sh: characters/<id>/ に無いファイルだけ雛形から置く。あるファイルは触らない。ディレクトリの無いぷちには何もしない
+# - seed-character-files.sh: characters/<id>/ に無いファイルだけ雛形から置く。あるファイルは触らない。ROUTINES.md と ROUTINES_DETAIL.md は両方無いときだけ。ディレクトリの無いぷちには何もしない
 # - sample-character: 深い層4ファイルがあり、SOUL.md に「参照ルール」「行動原則」、ROUTINES.md は表で記憶の整理・統合がある
 # - autonomous-action.sh（--dry-run）:
 #   - ルーチン回の文に ROUTINES_DETAIL.md。allowedTools に記憶の整理・統合の道具（T5）
@@ -54,8 +54,11 @@ echo "mio の SOUL" > "$CHAR/SOUL.md"
 echo "mio の ROUTINES" > "$CHAR/ROUTINES.md"
 OUT=$(CHARACTER_IDS=mio bash "$SEED" 2>&1)
 for f in "${DEEP[@]}" TODO_ACTIVE.md; do
+  [ "$f" = ROUTINES_DETAIL.md ] && continue
   cmp -s "$ROOT/sample-character/$f" "$CHAR/$f"; check "無い $f を雛形から置く" $?
 done
+[ ! -e "$CHAR/ROUTINES_DETAIL.md" ] && grep -q "mio: ROUTINES_DETAIL.md は置かない" <<< "$OUT"
+check "ROUTINES.md だけあるときは ROUTINES_DETAIL.md を置かない（表と節は対）" $?
 [ "$(cat "$CHAR/SOUL.md")" = "mio の SOUL" ] && [ "$(cat "$CHAR/ROUTINES.md")" = "mio の ROUTINES" ]
 check "あるファイル（SOUL.md・ROUTINES.md）は触らない" $?
 grep -q "mio: 雛形から置いた: .*SOUL_REFLECTIONS.md" <<< "$OUT"; check "置いたファイルをログに出す" $?
