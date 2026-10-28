@@ -6,6 +6,8 @@
 # 毎回読む層(SOUL.md・TODO_ACTIVE.md)・ルーチン回に読む ROUTINES.md。
 # 新しいぷちは雛形から必ず置き、すでに動いているぷち(澪など)も「無ければ置く」。**あるファイルは触らない**
 # (中身の比較もしない。ぷちが書き換えたものを雛形に戻さないため)。
+# ROUTINES.md と ROUTINES_DETAIL.md は対(表の行と手順の節が揃っている)なので、両方とも無いときだけ置く。
+# 片方だけ雛形から置くと、表に無い節・節の無い行ができる(2026-10-28 澪で実際に起きた)。
 # entrypoint.sh が起動のたびに CHARACTER_IDS の各ぷちに対して呼ぶ。引数でぷちを指定すればそのぷちだけ。
 #
 # Usage:
@@ -42,6 +44,15 @@ for raw in "${IDS[@]}"; do
   placed=()
   for f in "${SEED_FILES[@]}"; do
     [ -e "$dir/$f" ] && continue
+    case "$f" in
+      ROUTINES.md) pair=ROUTINES_DETAIL.md ;;
+      ROUTINES_DETAIL.md) pair=ROUTINES.md ;;
+      *) pair= ;;
+    esac
+    if [ -n "$pair" ] && [ -e "$dir/$pair" ]; then
+      echo "[seed-character-files] $id: $f は置かない($pair があるので。対で置くもの)" >&2
+      continue
+    fi
     [ -f "$SAMPLE_DIR/$f" ] || continue
     if cp "$SAMPLE_DIR/$f" "$dir/$f"; then
       placed+=("$f")
