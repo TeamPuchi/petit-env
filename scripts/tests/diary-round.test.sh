@@ -71,8 +71,11 @@ grep -q "DRY RUN" <<< "$OUT"; check "活動時間の外(20:30・settings.json �
 grep -q "settings_state.py mio gate .*--diary" "$FAKE_PY_CALLS"; check "設定の関所に --diary を渡す" $?
 ! grep -q "maintenance_state.py" "$FAKE_PY_CALLS"; check "メンテナンスの関所は見ない" $?
 grep -q "diary_material.py mio" "$FAKE_PY_CALLS"; check "家 API の diary_material.py <id> で今日の材料を読む" $?
-grep -q "自律行動タイム(Heartbeat)・今日をふり返る回" <<< "$OUT" && grep -q "今日一日をふり返って日記を書く回" <<< "$OUT"
+grep -q "自律行動タイム(Heartbeat)・今日をふり返る回" <<< "$OUT" && grep -q "今日一日をふり返る回" <<< "$OUT"
 check "プロンプトは今日をふり返る回" $?
+grep -q "記憶の整理: " <<< "$OUT" && grep -q "記憶の統合: " <<< "$OUT" && grep -q "3. 日記: " <<< "$OUT"
+check "日記の前に、記憶の整理と統合を自分でする(なぎさん 2026-10-28)" $?
+grep -q "mcp__memory__forget" <<< "$OUT"; check "忘れる道具 forget を許可する" $?
 grep -q "## 今日の材料" <<< "$OUT" && grep -q "\[09:00\] なぎ: おはよう" <<< "$OUT" && grep -q "\[15:00\] 猫を見た" <<< "$OUT"
 check "材料(会話・記憶)がプロンプトに入る" $?
 grep -q "@$CHAR/SOUL.md" <<< "$OUT" && grep -q "@$CHAR/diary_summary.md" <<< "$OUT"

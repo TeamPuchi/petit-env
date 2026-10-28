@@ -351,7 +351,12 @@ else
 fi
 
 if [ "$DIARY_ROUND" = true ]; then
-  ROUTINE_MODE="今回は、今日一日をふり返って日記を書く回。下の「今日の材料」と、自分の記憶(memory の list_recent_memories・recall)を見返して、house の diary_write で日記を書け。"
+  # 記憶の整理は夜の自動処理(memory-sleep)ではなく、ぷち自身がこの回でやる(なぎさん 2026-10-28。
+  # 何を覚えて何を忘れるか、どう言葉にしてまとめるかは自分で選ぶ。そのあとで日記を書く)
+  ROUTINE_MODE="今回は、今日一日をふり返る回。順番に:
+1. 記憶の整理: 今日の記憶(memory の list_recent_memories・recall)を見返す。何を覚えておき、何を忘れるかは自分で決める。忘れると決めたものだけ forget する(戻せない。理由を一言添える)。迷うものは残してよい。
+2. 記憶の統合: つながっている記憶があれば、自分の言葉で一つにまとめて remember し、元の記憶と link_memories でつなぐ。まとめるかどうか・どうまとめるかも自分で決める。
+3. 日記: 下の「今日の材料」と、整理した記憶を見て、house の diary_write で日記を書く。"
   echo "今日をふり返る回(日記)" >> "$LOG_FILE"
 elif [ "$ROUTINE_RAND" -lt 20 ]; then
   ROUTINE_MODE="今回はルーチン回。自分の ROUTINES.md(表)を読んで、最終実行日から間隔が空いたものを一つ選んで実行する。手順と前回のことは ROUTINES_DETAIL.md のその節にある。実行したら ROUTINES.md の最終実行日と、ROUTINES_DETAIL.md の「前回」を更新する。"
@@ -574,7 +579,7 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 # 現時点で揃っている MCP コンポーネントのみを前提にする:
 #   petit-memory (memory。見た目ごと残す save_visual_memory も。記憶の整理・統合をぷち自身がやる consolidate_memories・
 #     link_memories・get_working_memory・refresh_working_memory・recall_with_associations は T5・D5(2026-10-12)。
-#     雛形 ROUTINES の「記憶の整理(週1)」「記憶の統合(週1)」で使う) / petit-desire (desire-system) / petit-sns (petit-sns)
+#     夜の今日をふり返る回で、ぷちが自分で整理・統合する。忘れるのも自分で選ぶ forget(なぎさん 2026-10-28)) / petit-desire (desire-system) / petit-sns (petit-sns)
 #   (ローカル版の m5-mcp は、キャラ固有の MCP 設定にあるときだけ下で足す)
 #   / 家 API の house(ノート・手紙。2026-09-27。載っていない版の家 API では、許可だけあって呼ばれない。
 #     ボイスメモ voice_memo_leave は会話の中だけで使い、自律行動には許可していない)
@@ -609,6 +614,7 @@ mcp__memory__link_memories,
 mcp__memory__get_working_memory,
 mcp__memory__refresh_working_memory,
 mcp__memory__recall_with_associations,
+mcp__memory__forget,
 mcp__desire-system__get_desires,
 mcp__desire-system__desire_history,
 mcp__desire-system__satisfy_desire,
