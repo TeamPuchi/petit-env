@@ -2,7 +2,7 @@
 # run-for-each-character.sh の diary(夜の今日をふり返る回・T4)と sleep(4:00 に寝る・akatsuki-petit#133)の呼び方を確かめる。
 # - diary → autonomous-action.sh <id> --diary(中身で確かめる。run-for-each-character.sh は /opt/petit の絶対パスで呼ぶ)
 # - sleep → 家 API の scripts/go_to_sleep.py <id>(偽の python が引数を書き残す)。無い古い家 API では write_diary.py
-# - cron: diary は 20:30、sleep は 4:00。夜の memory-sleep は回さない。entrypoint.sh は PETIT_DIARY_AT で diary の行を書き換える
+# - cron: diary は 20:30、sleep は 4:00(memory-sleep 4:05 の前)。entrypoint.sh は PETIT_DIARY_AT で diary の行を書き換える
 # claude・AWS には触らない。
 #
 # Usage: bash scripts/tests/diary-job.test.sh
@@ -64,7 +64,7 @@ check "diary は write_diary.py を呼ばない(家 API に書かせるのは sl
 CRON="$HERE/../cron/petit.cron"
 grep -q '^30 20 \* \* \* /opt/petit/scripts/run-for-each-character.sh diary' "$CRON"; check "cron: 日記(今日をふり返る回)は毎晩 20:30" $?
 grep -q '^0 4 \* \* \* /opt/petit/scripts/run-for-each-character.sh sleep' "$CRON"; check "cron: 寝る(セッションを切る)は毎晩 4:00 のまま" $?
-! grep -q '^[^#].*run-for-each-character.sh memory-sleep' "$CRON"; check "cron: 夜の記憶の整理(memory-sleep)は回さない" $?
+grep -q '^5 4 \* \* \* /opt/petit/scripts/run-for-each-character.sh memory-sleep' "$CRON"; check "cron: 記憶の整理は 4:05 のまま(sleep の後)" $?
 ! grep -q '^0 4 .* diary' "$CRON"; check "cron: 4:00 の diary の行は無い" $?
 
 # entrypoint.sh の PETIT_DIARY_AT: entrypoint と同じ sed(行をそのまま写す)で cron を書き換えて diary の行だけ変わること
