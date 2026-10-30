@@ -29,6 +29,8 @@
 0 4 * * * /opt/petit/scripts/run-for-each-character.sh sleep >> /data/logs/sleep-cron.log 2>&1
 
 # 記憶の整理(memory sleep): 毎晩4:05(コンテナのTZ環境変数に依存)
+# 動くのは想起度の調整(薄れる)と、薄れきった記憶の忘却だけ。記憶を勝手にまとめる要約(merge)は petit-memory の既定で切ってある
+# (PETIT_MEMORY_SLEEP_MERGE=0・2026-10-14)。10/28 に cron ごと止めたのは誤り。想起度は元からの仕様なので戻した(10/30 なぎさん)
 # これは仕組みが回す整理。ぷち自身がやる「記憶の整理」「記憶の統合」(週1・日中でもよい)は ROUTINES.md のルーチンで、
 # 自律行動の memory の道具(consolidate_memories・link_memories など)を使う(T5・2026-10-12)
 5 4 * * * /opt/petit/scripts/run-for-each-character.sh memory-sleep >> /data/logs/memory-sleep-cron.log 2>&1
