@@ -8,7 +8,7 @@
 # m5-petit-app は 2026-09-26 に TeamPuchi/petit-api へ改名した。名前の列（コンテナ内のパス）は据え置く。
 m5-petit-app  TeamPuchi/petit-api      c0eb613c27ca8c6c51b13748b84e6fd5ba490853  .
 petit-memory  TeamPuchi/petit-memory  9b0682771329ab89f56b18d2fd766d97bed363f7  .
-petit-sns     TeamPuchi/petit-sns     8a5a0c5e85a95feb4721157925c12e9c876c456a  sns-api
+petit-sns     TeamPuchi/petit-sns     f4b16cc1a04e40601ac67354f155bd8161cd625c  sns-api
 petit-desire  TeamPuchi/petit-desire  a2b6e13ef37d5187ced5e1507857285fc5976e64  .
 # ぷちの教科書（10/27 Sync 40番）。public。リポ全体（petit/ の章を MCP が読む）。MCP は mcp/ の中（install-components.sh）
 petit-textbook PetitOnes/petit-textbook b4a9b3688c21a6c7370b4b36bafc0b7a6e642c58  .
