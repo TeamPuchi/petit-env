@@ -6,9 +6,9 @@
 #
 # 列: 名前（/opt/petit/repos/<名前> になる） リポジトリ SHA リポ内のディレクトリ（. = 全体）
 # m5-petit-app は 2026-09-26 に TeamPuchi/petit-api へ改名した。名前の列（コンテナ内のパス）は据え置く。
-m5-petit-app  TeamPuchi/petit-api      c0eb613c27ca8c6c51b13748b84e6fd5ba490853  .
+m5-petit-app  TeamPuchi/petit-api      9ffe209b11b8344d51e72899f15bd78654c85303  .
 petit-memory  TeamPuchi/petit-memory  9b0682771329ab89f56b18d2fd766d97bed363f7  .
-petit-sns     TeamPuchi/petit-sns     f4b16cc1a04e40601ac67354f155bd8161cd625c  sns-api
+petit-sns     TeamPuchi/petit-sns     677a6bbf5a0f24c3a67deaa05a446835d4d1b067  sns-api
 petit-desire  TeamPuchi/petit-desire  a2b6e13ef37d5187ced5e1507857285fc5976e64  .
 # ぷちの教科書（10/27 Sync 40番）。public。リポ全体（petit/ の章を MCP が読む）。MCP は mcp/ の中（install-components.sh）
 petit-textbook PetitOnes/petit-textbook b4a9b3688c21a6c7370b4b36bafc0b7a6e642c58  .
