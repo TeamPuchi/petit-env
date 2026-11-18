@@ -623,6 +623,7 @@ mcp__desire-system__shape_desire,
 mcp__desire-system__retire_desire,
 mcp__petit-sns__sns_post,
 mcp__petit-sns__sns_timeline,
+mcp__petit-sns__sns_read_post,
 mcp__petit-sns__sns_react,
 mcp__petit-sns__sns_comment,
 mcp__petit-sns__sns_inbox,
@@ -690,7 +691,7 @@ drop_tools() {  # drop_tools <道具名>...
 [ "$CAMERA_OFF" = true ] && drop_tools mcp__house__body_glance mcp__house__body_gaze mcp__m5-mcp__take_snapshot
 [ "$SPEAKER_OFF" = true ] && drop_tools mcp__house__body_speak mcp__m5-mcp__play_sound mcp__m5-mcp__play_icon
 [ "$SNS_OFF" = true ] && drop_tools mcp__petit-sns__sns_post mcp__petit-sns__sns_timeline mcp__petit-sns__sns_react \
-  mcp__petit-sns__sns_comment mcp__petit-sns__sns_inbox
+  mcp__petit-sns__sns_comment mcp__petit-sns__sns_inbox mcp__petit-sns__sns_read_post
 
 if [ -n "$TEST_PROMPT_STRING" ]; then
   PROMPT="$TEST_PROMPT_STRING"
