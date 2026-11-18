@@ -55,7 +55,7 @@ for t in mcp__house__body_wait_touch mcp__house__body_glance mcp__house__body_sp
          mcp__house__body_sleep mcp__house__body_wake \
          mcp__house__album_list mcp__house__album_look \
          mcp__house__album_say mcp__house__album_keep mcp__house__album_delete mcp__memory__save_visual_memory \
-         mcp__house__album_lock mcp__desire-system__desire_history; do
+         mcp__house__album_lock mcp__desire-system__desire_history mcp__house__murmur; do
   grep -qx "$t" <<<"$log"
   check "allowedTools に $t" $?
 done

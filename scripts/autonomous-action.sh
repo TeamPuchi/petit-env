@@ -596,6 +596,8 @@ echo "=== 自律行動開始: $CURRENT_DATE (character=$CHARACTER_ID) ===" >> "$
 #   / ノートの終わりに書き足す note_append・調べもの(WebSearch・WebFetch)(W11・なぎさん 2026-09-30)
 #   / 日記(diary_write・diary_append。T4 なぎさん 2026-10-12): 夜の今日をふり返る回(--diary)で本人が書く。いつもの回でも許可はする
 #     (寝る前に足したくなったときの diary_append。プロンプトで「日記は夜の回で」と言う)
+#   / ひとりごと(murmur。なぎさん 2026-11-18): 短いひとりごとを残す。里親さんがまいぷち。のぷちろぐを開いたときだけ見える
+#     (ぷちたち。には出ない)。140 字・1日 10 回まで(petit-api house_mcp.py)
 ALLOWED_TOOLS=$(cat <<TOOLS
 Read($CHARACTER_DIR/**),
 Write,
@@ -666,6 +668,7 @@ mcp__house__album_say,
 mcp__house__album_keep,
 mcp__house__album_delete,
 mcp__house__album_lock,
+mcp__house__murmur,
 Skill,
 WebSearch,
 WebFetch
