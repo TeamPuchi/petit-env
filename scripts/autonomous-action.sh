@@ -428,6 +428,36 @@ if [ "$DIARY_ROUND" = false ] && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ -f "$READ_
   fi
 fi
 
+# --- 体を起こす(なぎさん 2026-11-18「澪が動いているのに、体の顔が起きた顔にならない」) ---
+# 活動時間の外で家 API の見回りが眠らせた体(sleep_by idle)は、活動時間に入っても誰も起こさない。ぷちが body_wake を
+# 使わない回は、ぷちは動いているのに体は寝顔のままだった。自律行動の回の始まりに、家 API の
+# POST /internal/body/<id>/wake_for_action に頼む(起こすのは見回りが眠らせた体だけ。ぷち自身・里親さん・電池が
+# 眠らせた体はそのまま。決めるのは家 API)。体の知らせ(下)より前に呼ぶので、起きたことはその回の知らせに載る。
+# 対象外: 夜の今日をふり返る回(--diary)・手で渡すプロンプト(-p / --test-prompt)・dry-run・
+#   家の表が無い環境(PETIT_HOUSE_TABLE 未設定)・PETIT_WAKE_FOR_ACTION=0。
+# 口が無い(古い家 API は 404)・つながらない・エラーでは、ログに1行だけ残して続ける。
+if [ "$DIARY_ROUND" = false ] && [ "$DRY_RUN" = false ] && [ -z "$TEST_PROMPT_FILE" ] && [ -z "$TEST_PROMPT_STRING" ] \
+   && [ -n "${PETIT_HOUSE_TABLE:-}" ] && [ "${PETIT_WAKE_FOR_ACTION:-1}" != "0" ] && command -v curl > /dev/null 2>&1; then
+  WAKE_BASE="${PETIT_HOUSE_API_URL:-}"
+  WAKE_BASE="${WAKE_BASE%/}"
+  [ -n "$WAKE_BASE" ] || WAKE_BASE="http://127.0.0.1:${PORT:-8765}"
+  WAKE_SECRET="${PETIT_INTERNAL_SECRET:-${PETIT_GATEWAY_SECRET:-}}"
+  WAKE_SECRET="${WAKE_SECRET//\\/\\\\}"
+  WAKE_SECRET="${WAKE_SECRET//\"/\\\"}"
+  # 秘密は引数に出さない(ps で見える)。curl の設定として標準入力から渡す。機体の返事(ack・status)を待つので長めに待つ
+  WAKE_OUT=$(printf 'header = "x-petit-internal-secret: %s"\n' "$WAKE_SECRET" \
+    | curl -sS -K - -X POST --connect-timeout "${PETIT_WAKE_CONNECT_TIMEOUT_S:-2}" --max-time "${PETIT_WAKE_TIMEOUT_S:-20}" \
+        -w '\n%{http_code}' "$WAKE_BASE/internal/body/$CHARACTER_ID/wake_for_action" 2>&1)
+  WAKE_CODE="${WAKE_OUT##*$'\n'}"
+  WAKE_OUT=$(printf '%s' "${WAKE_OUT%"$WAKE_CODE"}" | tr -d '\n' | cut -c1-200)
+  if [ "$WAKE_CODE" = 200 ]; then
+    echo "[wake] $(printf '%s' "$WAKE_OUT" | jq -c '{woke, why}' 2>/dev/null || echo "$WAKE_OUT")" >> "$LOG_FILE"
+  else
+    echo "[wake] 体を起こす口を呼べなかった(http=$WAKE_CODE)。続ける" >> "$LOG_FILE"
+  fi
+  unset WAKE_SECRET
+fi
+
 # --- 体の知らせ(akatsuki-petit#99・#117) ---
 # 呼ばれていない間に体(機体)に起きたこと(触られた・持ち上がった・明るさが変わった など)を、
 # 家 API の scripts/body_news.py <id> で前回知らせたところから短く出す(house 表の BODY#。変わったところだけ)。

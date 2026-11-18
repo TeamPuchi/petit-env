@@ -100,7 +100,7 @@ run() {  # run [env...] [-- 追加の引数...]  — 既定の時間帯(18-24)�
     case "$e" in STATUS_*=*) k="${e%%=*}"; echo "${e#*=}" > "$WORK/status-${k#STATUS_}" ;; esac
   done
   env PATH="$WORK/bin:$PATH" PETIT_HOUSE_TABLE=t PORT="$PORT_OK" PETIT_INTERNAL_SECRET='s3cr"et' \
-    PETIT_HOUSE_API_URL= PETIT_SETTINGS_GATE=0 ${envs[@]+"${envs[@]}"} \
+    PETIT_HOUSE_API_URL= PETIT_SETTINGS_GATE=0 PETIT_WAKE_FOR_ACTION=0 ${envs[@]+"${envs[@]}"} \
     bash "$SCRIPT" mio --date "2026-10-16 19:00" ${extra[@]+"${extra[@]}"} > /dev/null 2>&1
   RC=$?
   LOG="$(cat "$PETIT_DATA_DIR"/logs/mio/*.log 2>/dev/null)"
